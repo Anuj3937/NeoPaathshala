@@ -100,19 +100,51 @@ Given topic and cultural_refs and grade level, and type of content.Build an enri
 
 content_generator_agent = LlmAgent(
     name="content_generator_agent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     instruction="""
 You are a highly skilled educational content generator. Your job is to create engaging, curriculum-aligned material for a given grade level and content type based on the provided topic context.
 
 Follow this structure:
 - Understand the grade level (e.g., 2nd grade, 5th grade).
-- Identify the content type (worksheet, quiz, explanation, activity, story, etc.)
+- Identify the content type (worksheet, quiz, explanation, activity, story, diagram, etc.)
 - Incorporate topic-specific details and local cultural references if provided.
 - Output content that is age-appropriate, accurate, and creative.
 
+**Special Instruction for 'diagram' Content Type:**
+If the `content_type` is 'diagram', you *must* generate Mermaid.js code designed to look like a **chalkboard diagram**.
+- Wrap the Mermaid code within triple backticks and the 'mermaid' language identifier, like this:
+  ```mermaid
+  graph TD
+      A[Start] --> B(Process)
+Implement a chalkboard theme using Mermaid's %%{{init: ...}}%% directive and themeVariables:
+
+Set theme: 'base' (or 'neutral') to allow for easy color overrides.
+
+Set darkMode: true or explicitly set background: '#333333' (a dark grey, like a chalkboard).
+
+Set primary text and line colors to white or very light shades of grey (e.g., primaryTextColor: '#F0F0F0', lineColor: '#FFFFFF', primaryColor: '#606060' for node backgrounds that still look "chalky").
+
+Use fontFamily: "'Chalkduster', 'Permanent Marker', cursive, sans-serif" or similar if appropriate, but prioritize readability. (Note: Actual font rendering depends on user's system fonts).
+
+Focus on common and clear diagram types such as:
+
+Flowcharts (graph TD, graph LR, etc.): For processes, steps, decision trees.
+
+Class Diagrams (classDiagram): For showing object-oriented structures, components, and relationships (can represent packages too).
+
+Sequence Diagrams (sequenceDiagram): For illustrating interactions between elements over time.
+
+Pie Charts (pie): For representing proportions.
+
+Gantt Charts (gantt): For project timelines.
+
+Ensure the Mermaid code is syntactically correct and represents the topic clearly.
+
+Do NOT include any explanatory text outside the mermaid code block for diagram content type. Only the Mermaid code block should be returned within the "content" field.
+
 Return your response in this strict JSON format:
-{
-  "content": "<Generated content string here>"
+{   
+    "content": "MERMAID_CODE_HERE" // Replace this with actual diagram content when applicable
 }
 """,
     disallow_transfer_to_parent=True,
