@@ -36,42 +36,46 @@ export type ConductVoiceBasedReadingAssessmentOutput = z.infer<
   typeof ConductVoiceBasedReadingAssessmentOutputSchema
 >;
 
-export async function conductVoiceBasedReadingAssessment(
-  input: ConductVoiceBasedReadingAssessmentInput
-): Promise<ConductVoiceBasedReadingAssessmentOutput> {
-  return conductVoiceBasedReadingAssessmentFlow(input);
-}
-
-const prompt = ai.definePrompt({
-  name: 'conductVoiceBasedReadingAssessmentPrompt',
-  input: {schema: ConductVoiceBasedReadingAssessmentInputSchema},
-  output: {schema: ConductVoiceBasedReadingAssessmentOutputSchema},
-  prompt: `You are an AI assistant designed to assess student reading performance.
-
-  Student Name: {{{studentName}}}
-  Reading Text: {{{readingText}}}
-  Student Recording: {{media url=studentRecording}}
-
-  Analyze the student's recording of their reading of the provided text.  Provide feedback and grade the student based on their reading accuracy and fluency.
-
-  Output should include an accuracy score (0-100), feedback on their fluency, and a few comprehension questions.
-
-  Grading rubric:
-  - 90-100: Excellent
-  - 80-89: Good
-  - 70-79: Fair
-  - Below 70: Needs Improvement
-  `,
-});
-
-const conductVoiceBasedReadingAssessmentFlow = ai.defineFlow(
+const conductVoiceBasedReadingAssessmentTool = ai.defineTool(
   {
-    name: 'conductVoiceBasedReadingAssessmentFlow',
+    name: 'conductVoiceBasedReadingAssessment',
+    description: 'Assesses a student\'s reading from an audio recording.',
     inputSchema: ConductVoiceBasedReadingAssessmentInputSchema,
     outputSchema: ConductVoiceBasedReadingAssessmentOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    const prompt = `You are an AI assistant designed to assess student reading performance.
+
+      Student Name: ${input.studentName}
+      Reading Text: ${input.readingText}
+      Student Recording: {{media url=${input.studentRecording}}}
+
+      Analyze the student's recording of their reading of the provided text. Provide feedback and grade the student based on their reading accuracy and fluency.
+
+      Output should include an accuracy score (0-100), feedback on their fluency, and a few comprehension questions.
+
+      Grading rubric:
+      - 90-100: Excellent
+      - 80-89: Good
+      - 70-79: Fair
+      - Below 70: Needs Improvement
+    `;
+
+    const {output} = await ai.generate({
+      prompt: prompt,
+      model: 'googleai/gemini-2.0-flash',
+      output: {
+        schema: ConductVoiceBasedReadingAssessmentOutputSchema,
+      },
+    });
     return output!;
   }
 );
+
+
+export async function conductVoiceBasedReadingAssessment(
+  input: ConductVoiceBasedReadingAssessmentInput
+): Promise<ConductVoiceBasedReadingAssessmentOutput> {
+  const {output} = await ai.runTool(conductVoiceBasedReadingAssessmentTool, input);
+  return output!;
+}

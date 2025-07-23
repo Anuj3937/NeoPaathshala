@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Implements the createDifferentiatedWorksheets flow.
@@ -17,6 +18,7 @@ const CreateDifferentiatedWorksheetsInputSchema = z.object({
       "A photo of a textbook page, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
   gradeLevels: z.array(z.string()).describe('The grade levels to tailor the worksheets to.'),
+  language: z.string().describe('The target language for the content.'),
 });
 export type CreateDifferentiatedWorksheetsInput = z.infer<
   typeof CreateDifferentiatedWorksheetsInputSchema
@@ -46,12 +48,13 @@ const createDifferentiatedWorksheetsPrompt = ai.definePrompt({
   output: {schema: CreateDifferentiatedWorksheetsOutputSchema},
   prompt: `You are an expert teacher specializing in creating differentiated worksheets for various grade levels from a textbook page.
 
-You will use the textbook page to generate worksheets tailored to the specified grade levels.
+You will use the textbook page to generate worksheets tailored to the specified grade levels in the specified language.
 
 Textbook Page: {{media url=textbookImage}}
 Grade Levels: {{gradeLevels}}
+Language: {{{language}}}
 
-Create differentiated worksheets for each grade level, ensuring the content is appropriate and challenging for that level.
+Create differentiated worksheets for each grade level, ensuring the content is appropriate and challenging for that level, and in the correct language.
 `,
 });
 

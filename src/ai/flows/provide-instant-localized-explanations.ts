@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow that provides instant, localized explanations with relevant analogies in response to voice queries in local languages.
@@ -14,7 +15,7 @@ const ProvideInstantLocalizedExplanationsInputSchema = z.object({
   query: z
     .string()
     .describe('The voice query in the local language.'),
-  language: z.string().describe('The local language of the query.'),
+  language: z.string().describe('The local language of the query. (e.g., Hindi, Marathi, Tamil, Bengali, Gujarati)'),
 });
 export type ProvideInstantLocalizedExplanationsInput = z.infer<typeof ProvideInstantLocalizedExplanationsInputSchema>;
 
