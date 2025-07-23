@@ -61,7 +61,8 @@ function App() {
       display: 'flex',
       flexDirection: 'column',
       margin: 0,
-      fontFamily: 'Arial, sans-serif'
+      fontFamily: 'Arial, sans-serif',
+      Width:"100%",
     },
     nav: {
       display: 'flex',
@@ -170,7 +171,8 @@ function App() {
     },
     calendarLine: {
       fontSize: '14px'
-    }
+    },
+  
   };
 
   return (
@@ -236,54 +238,72 @@ function App() {
       {/* Main Content */}
       <div style={styles.mainContent}>
         {/* Welcome Text */}
-        <h1 style={styles.welcomeText}>
-          Welcome !
-        </h1>
-        {!responseData ? (
-        <div style={styles.searchContainer}>
-          <div style={styles.searchInner}>
-            {/* Search Input */}
-            <input
-              type="text"
-              placeholder="How can i help ?"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
-              style={{
-                ...styles.searchInput,
-                '::placeholder': { color: '#d1d5db' }
-              }}
-            />
-            
-            {/* Voice Button */}
-            <button
-              onClick={handleVoiceClick}
-              style={{
-                ...styles.voiceButton,
-                animation: isListening ? 'pulse 2s infinite' : 'none'
-              }}
-              onMouseOver={(e) => e.target.style.backgroundColor = isListening ? '#dc2626' : '#16a34a'}
-              onMouseOut={(e) => e.target.style.backgroundColor = isListening ? '#ef4444' : '#22c55e'}
-            >
-              <Mic size={24} color="white" />
-            </button>
-            
-            {/* Send Button */}
-            <button
-              onClick={handleSendClick}
-              style={styles.sendButton}
-              onMouseOver={(e) => e.target.style.backgroundColor = '#16a34a'}
-              onMouseOut={(e) => e.target.style.backgroundColor = '#22c55e'}
-            >
-              <Send size={24} color="white" />
-            </button>
-          </div>
-        {loading && <p style={{ color: "#facc15", marginTop: "20px" }}>Loading...</p>}
-        {error && <p style={{ color: "#f87171", marginTop: "20px" }}>{error}</p>}
-        </div>
-            ): (
-        <ContentGenerator data={responseData} onBack={handleBack} />
+{!responseData ? (
+  <>
+    <h1 style={styles.welcomeText}>
+      Welcome !
+    </h1>
+
+    <div style={styles.searchContainer}>
+      <div style={styles.searchInner}>
+        {/* Search Input */}
+        <input
+          type="text"
+          placeholder="How can I help?"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyPress={handleKeyPress}
+          style={{
+            ...styles.searchInput,
+            '::placeholder': { color: '#d1d5db' }
+          }}
+        />
+
+        {/* Voice Button */}
+        <button
+          onClick={handleVoiceClick}
+          style={{
+            ...styles.voiceButton,
+            animation: isListening ? 'pulse 2s infinite' : 'none'
+          }}
+          onMouseOver={(e) =>
+            (e.target.style.backgroundColor = isListening ? '#dc2626' : '#16a34a')
+          }
+          onMouseOut={(e) =>
+            (e.target.style.backgroundColor = isListening ? '#ef4444' : '#22c55e')
+          }
+        >
+          <Mic size={24} color="white" />
+        </button>
+
+        {/* Send Button */}
+        <button
+          onClick={handleSendClick}
+          style={styles.sendButton}
+          onMouseOver={(e) => (e.target.style.backgroundColor = '#16a34a')}
+          onMouseOut={(e) => (e.target.style.backgroundColor = '#22c55e')}
+        >
+          <Send size={24} color="white" />
+        </button>
+      </div>
+
+      {loading && (
+        <p style={{ color: '#facc15', marginTop: '20px' }}>Loading...</p>
       )}
+      {error && (
+        <p style={{ color: '#f87171', marginTop: '20px' }}>{error}</p>
+      )}
+    </div>
+  </>
+) : (
+  <ContentGenerator
+    data={responseData}
+    onBack={handleBack}
+    searchQuery={searchQuery}
+    setResponseData={setResponseData}
+  />
+)}
+
 
       </div>
     </div>
