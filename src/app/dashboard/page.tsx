@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { useState, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,7 +35,8 @@ import {
   FlipHorizontal,
   ChevronLeft,
   ChevronRight,
-  AlertTriangle
+  AlertTriangle,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, parseISO, isSameDay as isSameDate, getDay, nextMonday } from 'date-fns';
@@ -83,6 +84,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { auth } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
 
 
 const toBase64 = (file: File): Promise<string> =>
@@ -163,6 +166,7 @@ function DashboardPageContent() {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const searchParams = useSearchParams();
+  const router = useRouter();
   const isGuestMode = searchParams.get('mode') === 'guest';
   
   const availableActions = isGuestMode ? guestActions : allActions;
@@ -281,6 +285,24 @@ function DashboardPageContent() {
             return await generateFlashcards({ topic: input.topic, language: input.language });
         default:
             throw new Error(`Unknown action: ${action}`);
+    }
+  };
+  
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({
+        title: "Logged Out",
+        description: "You have been successfully logged out.",
+      });
+      router.push('/');
+    } catch (error) {
+      console.error("Error logging out:", error);
+      toast({
+        variant: "destructive",
+        title: "Logout Failed",
+        description: "Could not log you out. Please try again.",
+      });
     }
   };
 
@@ -717,7 +739,7 @@ function DashboardPageContent() {
                   </FormItem>
                 )}
               />
-            <Button variant="ghost" size="icon"><Power /></Button>
+            <Button variant="ghost" size="icon" onClick={handleLogout}><LogOut /></Button>
             <Avatar className="h-8 w-8"><AvatarFallback>{isGuestMode ? 'G' : 'PS'}</AvatarFallback></Avatar>
           </div>
         </header>

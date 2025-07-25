@@ -33,14 +33,21 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
-import { GraduationCap, Upload } from "lucide-react";
+import { GraduationCap, Upload, Chrome } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
+import { Separator } from "@/components/ui/separator";
+
+import { auth, db } from "@/lib/firebase";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { useToast } from "@/hooks/use-toast";
 
 
 const onboardingSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Please enter a valid email." }),
+  password: z.string().min(8, { message: "Password must be at least 8 characters."}).optional(),
   board: z.enum(["cbse", "icse", "state", "other"]),
   customCurriculum: z.instanceof(File).optional(),
   grades: z.array(z.string()).min(1, { message: "Please select at least one grade." }),
@@ -64,6 +71,7 @@ const allSubjects = ["Mathematics", "Science", "Social Studies", "English", "Hin
 
 export default function OnboardingPage() {
     const router = useRouter();
+    const { toast } = useToast();
     const form = useForm<OnboardingFormValues>({
         resolver: zodResolver(onboardingSchema),
         defaultValues: {
@@ -76,10 +84,54 @@ export default function OnboardingPage() {
         },
     });
 
-    function onSubmit(data: OnboardingFormValues) {
+    const handleGoogleSignIn = async () => {
+      const provider = new GoogleAuthProvider();
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+
+        const userDocRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userDocRef);
+
+        if (!userDoc.exists()) {
+          // New user
+          await setDoc(userDocRef, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            createdAt: serverTimestamp(),
+            onboardingComplete: false,
+          });
+          // Pre-fill form and let them complete onboarding
+          form.setValue("name", user.displayName || "");
+          form.setValue("email", user.email || "");
+           toast({
+             title: "Welcome!",
+             description: "Please complete your profile to get started.",
+           });
+        } else {
+          // Returning user
+          toast({
+            title: "Welcome Back!",
+            description: "Redirecting you to your dashboard.",
+          });
+          router.push('/dashboard');
+        }
+      } catch (error) {
+        console.error("Error during Google sign-in:", error);
+        toast({
+          variant: "destructive",
+          title: "Sign-In Failed",
+          description: "Could not sign in with Google. Please try again.",
+        });
+      }
+    };
+    
+    const handleManualSubmit = (data: OnboardingFormValues) => {
         console.log("Onboarding data submitted:", data);
-        // Here you would typically send the data to your backend
-        // For now, we'll just log it and redirect to the dashboard
+        // In a real app, you would handle email/password sign up here
+        alert("Account created! Redirecting to dashboard...");
         router.push('/dashboard');
     }
 
@@ -92,18 +144,27 @@ export default function OnboardingPage() {
         </div>
         <Card className="w-full">
           <CardHeader>
-            <CardTitle>Tell Us About Yourself</CardTitle>
+            <CardTitle>Create Your Account or Log In</CardTitle>
             <CardDescription>
-              Personalize your Sahayak AI experience. This will help us tailor content and plans for your specific needs.
+              Join Sahayak AI to unlock your personalized teaching assistant.
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <Button variant="outline" onClick={handleGoogleSignIn}><Chrome className="mr-2"/> Continue with Google</Button>
+            </div>
+            <div className="flex items-center my-4">
+                <Separator className="flex-1" />
+                <span className="mx-4 text-muted-foreground">OR</span>
+                <Separator className="flex-1" />
+            </div>
+
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              <form onSubmit={form.handleSubmit(handleManualSubmit)} className="space-y-8">
                 
                 {/* Personal Details */}
                 <div className="space-y-4">
-                    <h3 className="text-lg font-semibold font-headline">Personal Details</h3>
+                    <h3 className="text-lg font-semibold font-headline">Sign Up with Email</h3>
                      <div className="grid md:grid-cols-2 gap-4">
                         <FormField
                         control={form.control}
@@ -125,8 +186,24 @@ export default function OnboardingPage() {
                             <FormItem>
                             <FormLabel>Email Address</FormLabel>
                             <FormControl>
-                                <Input placeholder="e.g., priya.sharma@school.com" {...field} />
+                                <Input type="email" placeholder="e.g., priya.sharma@school.com" {...field} />
                             </FormControl>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                        <FormField
+                        control={form.control}
+                        name="password"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                                <Input type="password" placeholder="********" {...field} />
+                            </FormControl>
+                             <FormDescription>
+                                Already have an account? Your details will be used to log you in.
+                            </FormDescription>
                             <FormMessage />
                             </FormItem>
                         )}
