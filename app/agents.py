@@ -1,11 +1,7 @@
-# agents.py
 from pydantic import BaseModel, Field
-# from google import genai
 from google.adk.agents import LlmAgent #type:ignore
 from google.adk.tools import google_search #type:ignore
 
-# 🔧 Configure Gemini
-# client = genai.Client()
 
 # 📦 Expected structured schema from Prompt Parser
 class ParseOutput(BaseModel):
@@ -22,7 +18,6 @@ prompt_parser = LlmAgent(
 Extract the intended topic, list of grade_levels (if mentioned), and desired content_types from: story, worksheet, diagram, activity. 
 If grade is not specified, set need_grade to true.
 Return exactly matching this JSON schema.""",
-    # response_mime_type="application/json",
     output_schema=ParseOutput,
     disallow_transfer_to_parent=True, 
     disallow_transfer_to_peers=True
@@ -66,7 +61,6 @@ culture_agent = LlmAgent(
 
         🎯 This response will be parsed directly by json.loads()—ensure it is always valid JSON.
         """,
-    # response_mime_type="application/json",
     # output_schema=CultureOutput,
     disallow_transfer_to_parent=True, 
     disallow_transfer_to_peers=True
@@ -82,7 +76,6 @@ mapper_agent = LlmAgent(
     instruction="""
 Given topic and cultural_refs, infer an appropriate list of grade_levels for Indian schools.
 Return JSON: { "grade_levels": [...] }""",
-    # response_mime_type="application/json",
     output_schema=GradeOutput,
     disallow_transfer_to_parent=True, 
     disallow_transfer_to_peers=True
@@ -101,7 +94,7 @@ Strictly follow these rules:
 - Ensure the prompt is appropriate for the given grade level.
 - If cultural_refs are provided, weave them in meaningfully (unless content_type is 'diagram', in which case cultural refs may be skipped).
 - For 'diagram', clearly specify it should be blackboard-friendly — i.e., only use shades of black and white.
-- Keep the prompt concise, clear,contain the cultural references, and focused on helping the generation model produce quality content.
+- Keep the prompt concise, clear,contain the cultural references if not a diagram and if relevant to the topic and type of content, and focused on helping the generation model produce quality content.
 - The model does not have image generation capability between texts so keep that in mind when creating a prompt for story , worksheet or any other content.
 - The output will be strictly covered using text.
 
@@ -142,4 +135,35 @@ You are an expert educational content creator. Your task is to generate **only t
 """,
     disallow_transfer_to_parent=True,
     disallow_transfer_to_peers=True,
+)
+
+class TopicsOutput(BaseModel):
+    topics: list[str] | None = Field(description="The topics for the given grade and subject.")
+
+# 1️⃣ Prompt Parser Agent
+topics_agent = LlmAgent(
+    name="topics_procurer",
+    model="gemini-2.0-flash",
+    instruction="""
+    From the provided grade level and subject generate topics meeting the sophistication of the grade level for that subject.
+    Return exactly matching this json schema.""",
+    output_schema=TopicsOutput,
+    disallow_transfer_to_parent=True, 
+    disallow_transfer_to_peers=True
+)
+
+class TypesOutput(BaseModel):
+    types: list[str] | None = Field(description="The content typs for the given grade ,topic and subject.")
+
+# 1️⃣ Prompt Parser Agent
+ctypa = LlmAgent(
+    name="topics_procurer",
+    model="gemini-2.0-flash",
+    instruction="""
+    From the provided grade level and subject generate content types meeting the sophistication of the grade level for that subject and would make for a good and creative learning experience.
+    The content types can be story,worksheet,diagram and an activity.
+    Return exactly matching this json schema.""",
+    output_schema=TypesOutput,
+    disallow_transfer_to_parent=True, 
+    disallow_transfer_to_peers=True
 )
