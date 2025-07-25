@@ -2,7 +2,9 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,7 +34,8 @@ import {
   Copy,
   FlipHorizontal,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  AlertTriangle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, parseISO, isSameDay as isSameDate, getDay, nextMonday } from 'date-fns';
@@ -79,6 +82,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 
 const toBase64 = (file: File): Promise<string> =>
@@ -101,7 +105,7 @@ const languages = [
 
 type LanguageValue = (typeof languages)[number]['value'];
 
-const actions = [
+const allActions = [
     { value: 'generateLessonKit', label: 'Lesson Kit', icon: Package },
     { value: 'generateWeeklyPlan', label: 'Weekly Plan', icon: Calendar },
     { value: 'createDifferentiatedWorksheets', label: 'Worksheets', icon: FileText },
@@ -113,7 +117,12 @@ const actions = [
     { value: 'provideInstantLocalizedExplanations', label: 'Explain a Topic', icon: Sparkles },
 ] as const;
 
-type ActionValue = (typeof actions)[number]['value'];
+const guestActions = [
+    { value: 'generateVisualAids', label: 'Visual Aids', icon: ImageIcon },
+    { value: 'provideInstantLocalizedExplanations', label: 'Explain a Topic', icon: Sparkles },
+]
+
+type ActionValue = (typeof allActions)[number]['value'];
 const actionsRequiringFile: ActionValue[] = ['generateWeeklyPlan', 'createDifferentiatedWorksheets', 'conductVoiceBasedReadingAssessment'];
 
 
@@ -121,7 +130,7 @@ const formSchema = z.object({
   prompt: z.string().min(1, "Please enter a prompt."),
   file: z.instanceof(File).optional(),
   language: z.enum(languages.map(l => l.value) as [LanguageValue, ...LanguageValue[]]).default('English'),
-  action: z.enum(actions.map(a => a.value) as [ActionValue, ...ActionValue[]]),
+  action: z.enum(allActions.map(a => a.value) as [ActionValue, ...ActionValue[]]),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -144,7 +153,7 @@ type Message = {
 
 type View = "home" | "calendar";
 
-export default function ChatPage() {
+function DashboardPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const { toast } = useToast();
@@ -153,15 +162,29 @@ export default function ChatPage() {
   const [currentView, setCurrentView] = useState<View>("home");
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  const searchParams = useSearchParams();
+  const isGuestMode = searchParams.get('mode') === 'guest';
+  
+  const availableActions = isGuestMode ? guestActions : allActions;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       prompt: "",
       language: "English",
-      action: "generateLessonKit"
+      action: availableActions[0].value as ActionValue,
     },
   });
+  
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+  React.useEffect(() => {
+    form.reset({
+      prompt: "",
+      language: form.getValues('language'),
+      action: availableActions[0].value as ActionValue,
+    });
+  }, [isGuestMode]);
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -183,6 +206,14 @@ export default function ChatPage() {
   }
   
   const handleApprove = (lessons: GenerateWeeklyPlanOutput['lessons']) => {
+    if (isGuestMode) {
+      toast({
+        variant: 'destructive',
+        title: 'Feature Locked',
+        description: 'Please sign up to save lesson plans to your calendar.',
+      });
+      return;
+    }
     const weekStart = nextMonday(new Date());
     const dayToOffset: {[key: string]: number} = {
         'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6
@@ -274,7 +305,7 @@ export default function ChatPage() {
                  </ul>
              </CardContent>
              <CardFooter className="justify-end">
-                 <Button onClick={() => handleApprove(result.lessons)}>Approve & Add to Calendar</Button>
+                 <Button onClick={() => handleApprove(result.lessons)} disabled={isGuestMode}>Approve & Add to Calendar</Button>
              </CardFooter>
          </Card>
         );
@@ -390,7 +421,7 @@ export default function ChatPage() {
         toast({
             variant: 'destructive',
             title: 'File Required',
-            description: `The "${actions.find(a => a.value === values.action)?.label}" action requires a file to be attached. Please upload a file.`,
+            description: `The "${allActions.find(a => a.value === values.action)?.label}" action requires a file to be attached. Please upload a file.`,
         });
         return;
     }
@@ -492,7 +523,7 @@ export default function ChatPage() {
                             </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                            {actions.map(act => (
+                            {availableActions.map(act => (
                                 <SelectItem key={act.value} value={act.value} className="font-body">
                                 <div className="flex items-center gap-2">
                                   <act.icon className="h-5 w-5" />
@@ -558,8 +589,8 @@ export default function ChatPage() {
                      <Card className="bg-card/80 backdrop-blur-sm border-2 border-primary/20 shadow-2xl shadow-primary/10 w-full">
                         <CardHeader>
                            <CardTitle className="flex items-center gap-2">
-                               {actions.find(a => a.value === message.action)?.icon ? React.createElement(actions.find(a => a.value === message.action)!.icon) : <Sparkles />}
-                               {actions.find(a => a.value === message.action)?.label}
+                               {allActions.find(a => a.value === message.action)?.icon ? React.createElement(allActions.find(a => a.value === message.action)!.icon) : <Sparkles />}
+                               {allActions.find(a => a.value === message.action)?.label}
                            </CardTitle>
                         </CardHeader>
                        <CardContent>
@@ -568,7 +599,7 @@ export default function ChatPage() {
                        <CardFooter className="justify-end gap-2">
                          <Button variant="outline" onClick={() => window.print()}><Printer className="mr-2"/>Print</Button>
                          {message.regenerate && <Button variant="outline" onClick={message.regenerate} disabled={isLoading}><RefreshCcw className="mr-2"/>Regenerate</Button>}
-                         <Button><Save className="mr-2" />Save</Button>
+                         {!isGuestMode && <Button><Save className="mr-2" />Save</Button>}
                        </CardFooter>
                      </Card>
                   </div>
@@ -660,7 +691,7 @@ export default function ChatPage() {
         <header className="flex items-center justify-between p-4 border-b bg-card">
           <div className="flex items-center gap-4">
              <Button variant={currentView === 'home' ? 'secondary' : 'ghost'} onClick={() => setCurrentView('home')}>Resources</Button>
-             <Button variant={currentView === 'calendar' ? 'secondary' : 'ghost'} onClick={() => setCurrentView('calendar')}>Weekly Calendar</Button>
+             <Button variant={currentView === 'calendar' ? 'secondary' : 'ghost'} onClick={() => setCurrentView('calendar')} disabled={isGuestMode}>Weekly Calendar</Button>
           </div>
           <div className="flex items-center gap-4">
             <FormField
@@ -687,12 +718,21 @@ export default function ChatPage() {
                 )}
               />
             <Button variant="ghost" size="icon"><Power /></Button>
-            <Avatar className="h-8 w-8"><AvatarFallback>PS</AvatarFallback></Avatar>
+            <Avatar className="h-8 w-8"><AvatarFallback>{isGuestMode ? 'G' : 'PS'}</AvatarFallback></Avatar>
           </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
             <div className="max-w-4xl mx-auto">
+                {isGuestMode && (
+                  <Alert className="mb-8">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Guest Mode</AlertTitle>
+                    <AlertDescription>
+                      You are currently in guest mode. Some features like saving content and weekly planning are disabled. <Link href="/onboarding" className="font-bold underline">Sign Up</Link> to get full access.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {currentView === 'home' ? renderHomeView() : renderCalendarView()}
             </div>
         </main>
@@ -775,4 +815,12 @@ function Flashcard({ front, back }: { front: string, back: string }) {
             </div>
         </div>
     );
+}
+
+export default function DashboardPage() {
+  return (
+    <React.Suspense fallback={<div>Loading...</div>}>
+      <DashboardPageContent />
+    </React.Suspense>
+  )
 }

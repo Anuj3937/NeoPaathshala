@@ -18,8 +18,8 @@ export default function LandingPage() {
           <Link href="#features" className="text-sm font-medium hover:underline underline-offset-4" prefetch={false}>
             Features
           </Link>
-          <Link href="#teaching-aid" className="text-sm font-medium hover:underline underline-offset-4" prefetch={false}>
-            Teaching Aid
+          <Link href="#how-it-works" className="text-sm font-medium hover:underline underline-offset-4" prefetch={false}>
+            How It Works
           </Link>
           <Button variant="ghost" asChild>
             <Link href="/onboarding" prefetch={false}>
@@ -55,9 +55,9 @@ export default function LandingPage() {
                     </Link>
                   </Button>
                   <Button asChild size="lg" variant="secondary">
-                     <Link href="/dashboard" prefetch={false}>
+                     <Link href="/dashboard?mode=guest" prefetch={false}>
                         <User className="mr-2"/>
-                        Continue as Guest
+                        Try as Guest
                      </Link>
                   </Button>
                 </div>
@@ -116,11 +116,11 @@ export default function LandingPage() {
             </div>
           </div>
         </section>
-        <section id="teaching-aid" className="w-full py-12 md:py-24 lg:py-32 bg-muted/20">
+        <section id="how-it-works" className="w-full py-12 md:py-24 lg:py-32 bg-muted/20">
             <div className="container px-4 md:px-6">
                 <div className="flex flex-col items-center justify-center space-y-4 text-center">
                     <div className="space-y-2">
-                        <div className="inline-block rounded-lg bg-muted px-3 py-1 text-sm">Teaching Aid</div>
+                        <div className="inline-block rounded-lg bg-muted px-3 py-1 text-sm">How It Works</div>
                         <h2 className="text-3xl font-bold font-headline tracking-tighter sm:text-5xl">Leveraging AI in Your Classroom</h2>
                         <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
                             Sahayak AI is more than a tool; it's a partner. Here's how to integrate it seamlessly into your teaching workflow.
