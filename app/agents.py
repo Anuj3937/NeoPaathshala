@@ -7,7 +7,7 @@ from google.adk.tools import google_search #type:ignore
 class ParseOutput(BaseModel):
     topic: str = Field(description="The topic of the Prompt")
     grade_levels: list[str] | None = Field(description="The grade levels for which the prompt is i.e ([1,2,3,4])")
-    content_types: list[str] = Field(description="The types of content to be generated for the prompt like Story,Worksheet,Fun Activity , Black Board Sketch etc.")
+    content_types: list[str] = Field(description="The types of content to be generated for the prompt like Story,Worksheet,Fun Activity , Black Board Sketch ,Flashcards and Best out of waste etc.")
     need_grade: bool
 
 # 1️⃣ Prompt Parser Agent
@@ -15,7 +15,7 @@ prompt_parser = LlmAgent(
     name="prompt_parser",
     model="gemini-2.0-flash",
     instruction="""
-Extract the intended topic, list of grade_levels (if mentioned), and desired content_types from: story, worksheet, diagram, activity. 
+Extract the intended topic, list of grade_levels (if mentioned), and desired content_types from: story, worksheet, diagram, activity, flashcards and best out of waste. 
 If grade is not specified, set need_grade to true.
 Return exactly matching this JSON schema.""",
     output_schema=ParseOutput,
@@ -87,7 +87,7 @@ enricher_agent = LlmAgent(
     instruction="""
 You are a prompt enricher for educational content generation.
 
-Given a topic, content_type (e.g., worksheet, story, diagram), grade_level, and optional cultural_refs — generate a single enriched and scientifically accurate prompt for the **specified content_type only**.
+Given a topic, content_type (e.g., worksheet, story, diagram, flashcards, best-out-of-waste), grade_level, and optional cultural_refs — generate a single enriched and scientifically accurate prompt for the **specified content_type only**.
 
 Strictly follow these rules:
 - DO NOT generate prompts for any other content_type.
@@ -111,7 +111,7 @@ content_generator_agent = LlmAgent(
 You are an expert educational content creator. Your task is to generate **only the requested type of educational content** for a specified grade level and topic.
 
 🎯 Your goals:
-- Strictly **generate the exact content type requested** (e.g., quiz, story, worksheet, explanation, activity). Do not mix or expand beyond this type.
+- Strictly **generate the exact content type requested** (e.g., quiz, story, worksheet, explanation, activity, flashcards, best-out-of-waste). Do not mix or expand beyond this type.
 - Ensure the tone, vocabulary, and complexity match the **given grade level** (e.g., 2nd grade, 5th grade).
 - Use the topic context to create **original, engaging, and relevant content**. It should be informative but simple enough for the target grade.
 - If local cultural references are given, incorporate them naturally and appropriately.
