@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from agents import prompt_parser, culture_agent, mapper_agent,enricher_agent
+from agents import prompt_parser, culture_agent, mapper_agent,enricher_agent ,syllabus_agent
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import json
@@ -118,14 +118,14 @@ async def mark_holiday(data: HolidayRequest):
             print(f"lesson {i}/{len(lessons)}")
             current_date = holiday_date
             next_working_date = get_next_working_day(current_date)
-            print(next_working_date)
-            cursor.execute("""
-                UPDATE lesson_plans
-                SET date = %s
-                WHERE id = %s
-            """, (next_working_date, lesson['id']))
-            print(f"{len(lessons)} lessons moved from {holiday_date} to next working day.")
-            conn.commit()
+            # print(next_working_date)
+            # cursor.execute("""
+            #     UPDATE lesson_plans
+            #     SET date = %s
+            #     WHERE id = %s
+            # """, (next_working_date, lesson['id']))
+            print(f"{len(lessons)} lessons moved from {holiday_date} to {next_working_date}.")
+            # conn.commit()
         return {"message": f"{len(lessons)} lessons moved from {holiday_date} to next working day."}
 
     except Exception as e:
@@ -191,6 +191,7 @@ async def parse_and_map(req: PromptRequest):
     # 2️⃣ Always Run Culture Agent
     culture_prompt = f"For the location of :{location} stick to this for the google search for the topic:{topic}"
     culture_str = run_agent(culture_agent, sess.user_id, sess.id, culture_prompt)
+    culture_refs = ""
     try:
         parsed_json = extract_json_from_response(culture_str)
         cultural_refs = parsed_json["cultural_refs"]
@@ -210,6 +211,14 @@ async def parse_and_map(req: PromptRequest):
     print(grade_levels)
     content = defaultdict(dict)  # grade -> { content_type -> content }
     for grade in grade_levels:
+        syllabus_prompt = f"For the BOARD of :CBSE stick to this for the google search for this topic:{topic} and this grade level:{grade}"
+        syllabus_str = run_agent(syllabus_agent, sess.user_id, sess.id, syllabus_prompt)
+        try:
+            parsed_json = extract_json_from_response(syllabus_str)
+            cultural_refs = parsed_json["cultural_refs"]
+        except ValueError as e:
+            print("Failed to parse  culture JSON:", e)
+        print(syllabus_str)
         for ty in content_types:
             builder_prompt = f"Grade Level:{grade}\n{mapping_prompt}\nContent Type:{ty}"
             enriched_prompt = run_agent(enricher_agent,sess.user_id,sess.id,builder_prompt)

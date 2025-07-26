@@ -1,3 +1,4 @@
+// src/App.js
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
@@ -5,9 +6,10 @@ import SearchHome from './components/SearchHome';
 import ContentGenerator from './components/ContentGenerator';
 import WeeklyPlanner from './components/WeeklyPlanner';
 import SavedResourcesDisplay from './components/Resources';
+
 function App() {
   const [responseData, setResponseData] = useState(null);
-  
+
   const handleQuerySubmit = async (query) => {
     const res = await fetch("http://localhost:8000/parse_and_map/", {
       method: "POST",
@@ -29,7 +31,12 @@ function App() {
               !responseData ? (
                 <SearchHome onSubmit={handleQuerySubmit} />
               ) : (
-                <ContentGenerator data={responseData} onBack={() => setResponseData(null)} />
+                <ContentGenerator
+                  data={responseData}
+                  onBack={() => setResponseData(null)}
+                  // 🌟 ADD THIS LINE: Pass setResponseData as a prop
+                  setResponseData={setResponseData}
+                />
               )
             }
           />

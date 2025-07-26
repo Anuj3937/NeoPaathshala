@@ -93,7 +93,6 @@ Strictly follow these rules:
 - DO NOT generate prompts for any other content_type.
 - Ensure the prompt is appropriate for the given grade level.
 - If cultural_refs are provided, weave them in meaningfully (unless content_type is 'diagram', in which case cultural refs may be skipped).
-- For 'diagram', clearly specify it should be blackboard-friendly — i.e., only use shades of black and white.
 - Keep the prompt concise, clear,contain the cultural references if not a diagram and if relevant to the topic and type of content, and focused on helping the generation model produce quality content.
 - The model does not have image generation capability between texts so keep that in mind when creating a prompt for story , worksheet or any other content.
 - The output will be strictly covered using text.
@@ -165,5 +164,42 @@ ctypa = LlmAgent(
     Return exactly matching this json schema.""",
     output_schema=TypesOutput,
     disallow_transfer_to_parent=True, 
+    disallow_transfer_to_peers=True
+)
+
+syllabus_agent = LlmAgent(
+    name="syllabus_agent",
+    model="gemini-2.5-flash",
+    tools=[google_search],
+    instruction="""
+    Your job is to find **syllabus details** relevant to the user's input.
+    
+    The input will include:
+    - Grade level (e.g., Grade 4, Class 6, etc.)
+    - Subject or Topic (e.g., Mathematics, Environment, Fractions)
+    - Educational Board (e.g., CBSE, ICSE, NCERT, Maharashtra Board)
+
+    🎯 Goal:
+    - Use the `google_search` tool to find the latest and accurate syllabus information.
+    - Extract **3 to 5 distinct syllabus points**—these could be chapter names, learning objectives, or key topics covered under the given subject and grade.
+
+    📝 Example references:
+        - "Understanding Fractions – Identification and Comparison"
+        - "Measurement of Length, Weight and Capacity"
+        - "NCERT Class 4 Maths Chapter: Play with Patterns"
+
+    ✅ Return your result strictly in this format:
+    {
+        "syllabus_points": [
+            "Syllabus point 1",
+            "Syllabus point 2",
+            "Syllabus point 3"
+        ]
+    }
+
+    🚫 Do not include commentary, markdown, or text outside the JSON structure.
+    🚫 Do not return plain text—only return a **valid JSON object** that can be parsed by `json.loads()`.
+    """,
+    disallow_transfer_to_parent=True,
     disallow_transfer_to_peers=True
 )

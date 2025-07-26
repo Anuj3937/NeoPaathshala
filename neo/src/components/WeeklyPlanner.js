@@ -934,7 +934,7 @@ const navigateMonth = (direction) => {
         <h4>Topic:{modalContent.lesson_topic || "Topic not found"}</h4>
         <h4>Type:{modalContent.lesson_type || "Type of content not found"}</h4>
         {modalContent ? (
-          modalContent.lesson_type.startsWith("data:image/") || modalContent.lesson_type.startsWith("http") ? (
+          modalContent.lesson_content.startsWith("data:image/") || modalContent.lesson_content.startsWith("http") ? (
             <img
               src={modalContent.lesson_content}
               alt="Generated diagram"
@@ -1004,7 +1004,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#634d4dff",
+    backgroundColor: "#000000ff",
     overflow:"hidden",
   },
   loading: {
