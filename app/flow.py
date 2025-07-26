@@ -9,10 +9,10 @@ import requests
 from dotenv import load_dotenv
 from google.adk.sessions import InMemorySessionService  # type: ignore
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-API_KEY = os.getenv("MAPS_API")
+
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+API_KEY = os.getenv("MAPS_API")
 
 sessions = InMemorySessionService()
 
