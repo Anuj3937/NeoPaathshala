@@ -4,6 +4,8 @@ import jsPDF from "jspdf";
 import { Calendar, Filter, Plus, Eye, Trash2, ArrowRight, Coffee } from "lucide-react";
 import React, { useState, useEffect ,useRef} from "react";
 import { Save,Camera,Printer,FileDown,IterationCw } from "lucide-react";
+// Import the new IndexedDB functions for the weekly planner
+import { getWeeklyPlan, saveWeeklyPlan } from './storage';
 
 const WeeklyLessonPlanner = () => {
     const printRef = useRef();
@@ -210,35 +212,61 @@ const handleDownloadPDF = () => {
     fetchLessonData();
   }, []);
 
+  /**
+   * UPDATED FETCH LOGIC:
+   * 1. Tries to fetch lesson plans from the server.
+   * 2. If successful, saves the data to IndexedDB for offline use.
+   * 3. If the server is unreachable, it attempts to load data from IndexedDB.
+   */
   const fetchLessonData = async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
+      // 1. Attempt to fetch fresh data from the server
       const response = await fetch(`http://localhost:8000/lesson-plans/${userId}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        // console.log(data);
-        
-        // Handle the nested lesson_plans structure and add IDs
-        const lessonPlans = data.lesson_plans || [];
-        const lessonsWithIds = lessonPlans.map((lesson, index) => ({
-          ...lesson,
-          id: lesson.id || `lesson_${index}_${Date.now()}` // Add ID if not present
-        }));
-        
-        setLessonData(lessonsWithIds);
-        setFilteredData(lessonsWithIds);
-        setHasData(lessonsWithIds.length > 0);
-      } else {
-        setHasData(false);
+      if (!response.ok) {
+        // This will trigger the catch block below
+        throw new Error('Server connection failed.');
       }
+      
+      const data = await response.json();
+      const lessonPlans = data.lesson_plans || [];
+      const lessonsWithIds = lessonPlans.map((lesson, index) => ({
+          ...lesson,
+          id: lesson.id || `lesson_${index}_${Date.now()}` // Ensure a unique ID for IndexedDB
+      }));
+        
+      // 2. If fetch is successful, save data locally to IndexedDB
+      await saveWeeklyPlan(lessonsWithIds);
+      console.log("Fetched data from server and saved to IndexedDB.");
+
+      setLessonData(lessonsWithIds);
+      setFilteredData(lessonsWithIds);
+      setHasData(lessonsWithIds.length > 0);
+
     } catch (error) {
-      console.error("Failed to fetch lesson data:", error);
-      setHasData(false);
+      console.error("Server fetch failed. Attempting to load from local storage:", error);
+      // 3. If server fetch fails, load data from IndexedDB
+      try {
+        const localData = await getWeeklyPlan();
+        if (localData && localData.length > 0) {
+            console.log("Successfully loaded data from IndexedDB.");
+            setLessonData(localData);
+            setFilteredData(localData);
+            setHasData(true);
+        } else {
+            console.log("No data found in local storage.");
+            setHasData(false);
+        }
+      } catch (dbError) {
+          console.error("Failed to load data from IndexedDB:", dbError);
+          setHasData(false); // No online or local data available
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Filter logic
 
   // Check if generation is in progress
   // const checkGenerationStatus = async () => {
