@@ -1,11 +1,14 @@
 // Get color for different subjects
 import Select from "react-select";
+import jsPDF from "jspdf";
 import { Calendar, Filter, Plus, Eye, Trash2, ArrowRight, Coffee } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect ,useRef} from "react";
+import { Save,Camera,Printer,FileDown,IterationCw } from "lucide-react";
 // Import the new IndexedDB functions for the weekly planner
 import { getWeeklyPlan, saveWeeklyPlan } from './storage';
 
 const WeeklyLessonPlanner = () => {
+    const printRef = useRef();
     const getSubjectColor = (subject) => {
     const colors = {
       'Math': '#3b82f6',
@@ -62,7 +65,148 @@ const WeeklyLessonPlanner = () => {
 
   // Mock user ID - in real app, get from auth
   const userId = "1234";
+  const handleDownloadImage = () => {
+    if (!modalContent.lesson_type || !modalContent.lesson_type.startsWith("data:image/")) {
+      return alert("No image modalContent.lesson_type to download");
+    }
+    const link = document.createElement("a");
+    link.href = modalContent.lesson_type;
+    link.download = `grade-${modalContent.lesson_grade}_${modalContent.lesson_type}_${Date.now()}.png`;
+    link.click();
+  };
 
+function decodeHTMLEntities(html) {
+  const txt = document.createElement("textarea");
+  txt.innerHTML = html;
+  return txt.value;
+}
+// const handleSave = async () => {
+//   if (!modalContent.lesson_type) return alert("No modalContent.lesson_type to save.");
+//   try {
+//     await saveContent(modalContent.lesson_grade, modalContent.lesson_type, data.topic, modalContent.lesson_type);
+//     alert("✅ modalContent.lesson_type saved successfully.");
+//   } catch (e) {
+//     console.error("Save failed:", e);
+//     alert("❌ Failed to save modalContent.lesson_type.");
+//   }
+// };
+
+  // 2️⃣ Download as PDF
+const handleDownloadPDF = () => {
+  const doc = new jsPDF({
+    unit: "pt",
+    format: "letter",
+  });
+
+  // compute printable width (page width minus horizontal margins)
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 10;
+  const printableWidth = (pageWidth + margin * 2)*1.25;
+
+  if (modalContent.lesson_type === "diagram" && modalContent.lesson_type.startsWith("data:image/")) {
+    // embed image as before…
+    const imgProps = doc.getImageProperties(modalContent.lesson_type);
+    const imgW = printableWidth;
+    const imgH = (imgProps.height * imgW) / imgProps.width;
+    doc.addImage(modalContent.lesson_type, "PNG", margin, margin, imgW, imgH);
+  } else {
+    // 1) Normalize <br> to newline
+    let text = modalContent.lesson_content
+  .replace(/<br\s*\/?>/gi, "\n")    // <br> → newline
+  .replace(/<strong>([\s\S]*?)<\/strong>/gi, (_, inner) => {
+    // wrap bold in markers or leave as-is
+    return inner.toUpperCase();     // for instance
+  });
+    text = decodeHTMLEntities(text);
+    // 2) Strip any remaining HTML tags
+    text = text.replace(/<[^>]+>/g, "");
+
+    // 3) Split into wrapped lines
+    const lines = doc.splitTextToSize(text, printableWidth);
+
+    // 4) Render title and lines
+    let y = margin;
+    doc.setFontSize(14);
+    doc.text(`Grade ${modalContent.lesson_grade} – ${modalContent.lesson_type}`, margin, y);
+    y += 24;
+    doc.setFontSize(12);
+
+    lines.forEach((line) => {
+      if (y > doc.internal.pageSize.getHeight() - margin) {
+        doc.addPage();
+        y = margin;
+      }
+      doc.text(line, margin, y);
+      y += 16;
+    });
+  }
+
+  doc.save(`grade-${modalContent.lesson_grade}_${modalContent.lesson_type}.pdf`);
+};
+
+  // 3️⃣ Print via window.print (uses your CSS @media print rules)
+ const printableFrameRef = useRef(null);
+
+  const handlePrint = () => {
+    // 1) Create an off-screen iframe
+    let frame = printableFrameRef.current;
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.style.position = "fixed";
+      frame.style.right = "0";
+      frame.style.bottom = "0";
+      frame.style.width = "0";
+      frame.style.height = "0";
+      frame.style.border = "0";
+      printableFrameRef.current = frame;
+      document.body.appendChild(frame);
+    }
+
+    const doc = frame.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { font-size: 18pt; margin-bottom: 12pt; }
+            p, li { font-size: 12pt; line-height: 1.4; }
+            img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>Grade ${modalContent.lesson_grade} – ${modalContent.lesson_type}</h1>
+          ${
+            modalContent.lesson_type === "diagram" && modalContent.lesson_type.startsWith("data:image/")
+              ? `<img src="${modalContent.lesson_type}" />`
+              : (() => {
+                  // convert <br> to paragraphs
+                  let html = modalContent.lesson_content || "";
+                  // decode HTML entities
+                  const txt = document.createElement("textarea");
+                  txt.innerHTML = html;
+                  html = txt.value;
+                  // wrap <br> → </p><p>
+                  html = html
+                    .replace(/<br\s*\/?>/gi, "</p><p>")
+                    .replace(/<\/p><p>/g, "</p><p>");
+                  // ensure paragraphs
+                  if (!html.match(/^<p>/)) html = `<p>${html}</p>`;
+                  return html;
+                })()
+          }
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // 2) Wait for images to load (if any), then trigger print
+    frame.onload = () => {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      // optional: remove the iframe after printing
+    };
+  };
   // Fetch existing lesson data
   useEffect(() => {
     fetchLessonData();
@@ -122,9 +266,28 @@ const WeeklyLessonPlanner = () => {
     }
   };
 
+  // Filter logic
 
-  // No changes below this line are required for the IndexedDB integration.
-  // ... (rest of the component code remains the same)
+  // Check if generation is in progress
+  // const checkGenerationStatus = async () => {
+  //   try {
+  //     const response = await fetch(`http://localhost:8000/generation-status/${userId}`);
+  //     if (response.ok) {
+  //       const status = await response.json();
+  //       setIsGenerating(status.is_generating);
+  //     }
+  //   } catch (error) {
+  //     console.error("Failed to check generation status:", error);
+  //   }
+  // };
+
+  // useEffect(() => {
+  //   if (hasData) {
+  //     checkGenerationStatus();
+  //     const interval = setInterval(checkGenerationStatus, 5000); // Check every 5 seconds
+  //     return () => clearInterval(interval);
+  //   }
+  // }, [hasData]);
 
   // Filter logic
   useEffect(() => {
@@ -552,7 +715,7 @@ const navigateMonth = (direction) => {
                 </div>
                 <div style={styles.lessonActions}>
                   <button
-                    onClick={() => handleViewContent(lesson.lesson_content)}
+                    onClick={() => handleViewContent(lesson)}
                     style={styles.actionButton}
                   >
                     <Eye size={14} />
@@ -666,11 +829,114 @@ const navigateMonth = (direction) => {
           ×
         </button>
       </div>
+      <div className="actions" style={styles.actions}>
+            {/* <button
+              style={styles.regenButton}
+              onClick={() => handleRegen(selectedGrade, selectedType)}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #004a05";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #004a05, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #004a05, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+              <IterationCw />
+              Regenerate
+            </button> */}
+            {/* <button onClick={handleSave} style={styles.saveButton}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #b11b1bff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #b11b1bff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #b11b1bff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+            <Save /> Save
+          </button> */}
+            {modalContent.lesson_type === "diagram" ? (
+            <button style={styles.dwnldButton} onClick={handleDownloadImage}                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #111111ff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+              <Camera color="#ffffff" /> Download PNG
+            </button>
+          ) : (
+            <>
+              <button onClick={handleDownloadPDF} style={styles.dwnldButton}
+                              onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #00031dff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px #00031dff)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #00031dff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+                <FileDown color="#ffffff" /> Download PDF
+              </button>
+              <button onClick={handlePrint} style={styles.printButton}
+                              onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #000000ff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px #000000ff";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #000000ff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+                <Printer color="#ffffff" /> Print
+              </button>
+            </>
+          )}
+        </div>
+            <div ref={printRef} className="printable-content">
       <div style={styles.contentBody}>
+        <h4>Grade:{modalContent.lesson_grade || "Grade not found"}</h4>
+        <h4>Topic:{modalContent.lesson_topic || "Topic not found"}</h4>
+        <h4>Type:{modalContent.lesson_type || "Type of content not found"}</h4>
         {modalContent ? (
-          modalContent.startsWith("data:image/") || modalContent.startsWith("http") ? (
+          modalContent.lesson_type.startsWith("data:image/") || modalContent.lesson_type.startsWith("http") ? (
             <img
-              src={modalContent}
+              src={modalContent.lesson_content}
               alt="Generated diagram"
               style={{
                 maxWidth: "100%",
@@ -680,12 +946,13 @@ const navigateMonth = (direction) => {
               }}
             />
           ) : (
-            <div dangerouslySetInnerHTML={{ __html: modalContent }} />
+            <div dangerouslySetInnerHTML={{ __html: modalContent.lesson_content }} />
           )
         ) : (
           <p style={styles.mermaidLoadingText}>Loading diagram...</p>
         )}
       </div>
+    </div>
     </div>
   </div>
 )}
@@ -696,7 +963,7 @@ const customSelectStyles = {
   control: (base) => ({
     ...base,
     borderColor: "#cbd5e1",
-    boxShadow: "none",
+    boxShadow: "none",  
     "&:hover": { borderColor: "#6366f1" },
     fontSize: "1rem"
   }),
@@ -1092,6 +1359,42 @@ const styles = {
     fontSize: "1rem",
     width: "100%",
   },
+      printButton: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "12px 14px",
+      fontSize: "16px",
+      color: "white",
+      backgroundColor: "#272727ff",
+      border: "none",
+      borderRadius: "30px",
+      cursor: "pointer",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #272727ff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "translateY(0)",
+    },
+      dwnldButton: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "12px 14px",
+      fontSize: "16px",
+      color: "white",
+      backgroundColor: "#000c3aff",
+      border: "none",
+      borderRadius: "30px",
+      cursor: "pointer",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #000c3aff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "translateY(0)",
+    },
+      actions:{
+      display:'flex',
+      gap:'12px',
+    }
 };
 
 export default WeeklyLessonPlanner;
