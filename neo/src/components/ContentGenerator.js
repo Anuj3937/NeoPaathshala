@@ -157,7 +157,8 @@ const handleDownloadPDF = () => {
   const handleRegen = async (grade, contentType) => {
     try {
       const promptString = `Generate a ${contentType} for grade ${grade} on the topic "${data.topic}"`;
-      const res = await fetch("http://192.168.29.232:8000/parse_and_map/", {
+
+      const res = await fetch(`http://localhost:8000/parse_and_map/`, { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: promptString }),
