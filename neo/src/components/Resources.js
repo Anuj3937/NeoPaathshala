@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState,useRef } from 'react';
 import { getAllSavedContent, deleteSavedContent } from './storage';
 import {ExternalLink,Shredder,File} from 'lucide-react';
+import jsPDF from "jspdf";
+import { Camera,Printer,FileDown} from "lucide-react";
 
 const SavedResourcesDisplay = () => {
+  const printRef = useRef()
   const [groupedContent, setGroupedContent] = useState({});
   const [gradeFilters, setGradeFilters] = useState({});
   const [activeItem, setActiveItem] = useState(null);
@@ -31,7 +34,15 @@ const SavedResourcesDisplay = () => {
   const handleGradeFilterChange = (type, grade) => {
     setGradeFilters((prev) => ({ ...prev, [type]: grade }));
   };
-
+    const handleDownloadImage = () => {
+    if (!activeItem.content || !activeItem.content.startsWith("data:image/")) {
+      return alert("No image content to download");
+    }
+    const link = document.createElement("a");
+    link.href = activeItem.content;
+    link.download = `grade-${activeItem.Grade}_${activeItem.type}_${Date.now()}.png`;
+    link.click();
+  };
   const handleDelete = async (id, type) => {
     await deleteSavedContent(id);
     setGroupedContent((prev) => {
@@ -40,6 +51,127 @@ const SavedResourcesDisplay = () => {
       return updated;
     });
   };
+  function decodeHTMLEntities(html) {
+  const txt = document.createElement("textarea");
+  txt.innerHTML = html;
+  return txt.value;
+}
+    // 2️⃣ Download as PDF
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF({
+      unit: "pt",
+      format: "letter",
+    });
+  
+    // compute printable width (page width minus horizontal margins)
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 10;
+    const printableWidth = (pageWidth + margin * 2)*1.25;
+  
+    if (activeItem.type === "diagram" && activeItem.content.startsWith("data:image/")) {
+      // embed image as before…
+      const imgProps = doc.getImageProperties(activeItem.content);
+      const imgW = printableWidth;
+      const imgH = (imgProps.height * imgW) / imgProps.width;
+      doc.addImage(activeItem.content, "PNG", margin, margin, imgW, imgH);
+    } else {
+      // 1) Normalize <br> to newline
+      let text = activeItem.content
+    .replace(/<br\s*\/?>/gi, "\n")    // <br> → newline
+    .replace(/<strong>([\s\S]*?)<\/strong>/gi, (_, inner) => {
+      // wrap bold in markers or leave as-is
+      return inner.toUpperCase();     // for instance
+    });
+      text = decodeHTMLEntities(text);
+      // 2) Strip any remaining HTML tags
+      text = text.replace(/<[^>]+>/g, "");
+  
+      // 3) Split into wrapped lines
+      const lines = doc.splitTextToSize(text, printableWidth);
+  
+      // 4) Render title and lines
+      let y = margin;
+      doc.setFontSize(14);
+      doc.text(`Grade ${activeItem.Grade} – ${activeItem.type}`, margin, y);
+      y += 24;
+      doc.setFontSize(12);
+  
+      lines.forEach((line) => {
+        if (y > doc.internal.pageSize.getHeight() - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.text(line, margin, y);
+        y += 16;
+      });
+    }
+  
+    doc.save(`grade-${activeItem.Grade}_${activeItem.type}.pdf`);
+  };
+  
+    // 3️⃣ Print via window.print (uses your CSS @media print rules)
+   const printableFrameRef = useRef(null);
+  
+    const handlePrint = () => {
+      // 1) Create an off-screen iframe
+      let frame = printableFrameRef.current;
+      if (!frame) {
+        frame = document.createElement("iframe");
+        frame.style.position = "fixed";
+        frame.style.right = "0";
+        frame.style.bottom = "0";
+        frame.style.width = "0";
+        frame.style.height = "0";
+        frame.style.border = "0";
+        printableFrameRef.current = frame;
+        document.body.appendChild(frame);
+      }
+  
+      const doc = frame.contentWindow.document;
+      doc.open();
+      doc.write(`
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              h1 { font-size: 18pt; margin-bottom: 12pt; }
+              p, li { font-size: 12pt; line-height: 1.4; }
+              img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
+            </style>
+          </head>
+          <body>
+            <h1>Grade ${activeItem.Grade} – ${activeItem.type}</h1>
+            ${
+              activeItem.type === "diagram" && activeItem.content.startsWith("data:image/")
+                ? `<img src="${activeItem.content}" />`
+                : (() => {
+                    // convert <br> to paragraphs
+                    let html = activeItem.content || "";
+                    // decode HTML entities
+                    const txt = document.createElement("textarea");
+                    txt.innerHTML = html;
+                    html = txt.value;
+                    // wrap <br> → </p><p>
+                    html = html
+                      .replace(/<br\s*\/?>/gi, "</p><p>")
+                      .replace(/<\/p><p>/g, "</p><p>");
+                    // ensure paragraphs
+                    if (!html.match(/^<p>/)) html = `<p>${html}</p>`;
+                    return html;
+                  })()
+            }
+          </body>
+        </html>
+      `);
+      doc.close();
+  
+      // 2) Wait for images to load (if any), then trigger print
+      frame.onload = () => {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        // optional: remove the iframe after printing
+      };
+    };
 
   return (
     <div style={styles.mainContainer}>
@@ -112,6 +244,7 @@ const SavedResourcesDisplay = () => {
       })}
       {isModalOpen && activeItem && (
   <div style={styles.modalOverlay}>
+            <div ref={printRef} className="printable-content">
     <div style={styles.modalContent}>
       <h3>Topic: {activeItem.topic.toUpperCase()}</h3>
       <button
@@ -120,7 +253,87 @@ const SavedResourcesDisplay = () => {
       >
         Close
       </button>
-
+                   <div className="actions" style={styles.actions}>
+            {/* <button
+              style={styles.regenButton}
+              onClick={() => handleRegen(selectedGrade, selectedType)}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #004a05";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #004a05, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #004a05, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+              <IterationCw />
+              Regenerate
+            </button> */}
+            {activeItem.type === "diagram" ? (
+            <button style={styles.dwnldButton} onClick={handleDownloadImage}                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #111111ff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+              <Camera color="#ffffff" /> Download PNG
+            </button>
+          ) : (
+            <>
+              <button onClick={handleDownloadPDF} style={styles.dwnldButton}
+                              onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #00031dff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px #00031dff)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #00031dff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+                <FileDown color="#ffffff" /> Download PDF
+              </button>
+              <button onClick={handlePrint} style={styles.printButton}
+                              onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #000000ff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px #000000ff";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #000000ff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+                <Printer color="#ffffff" /> Print
+              </button>
+            </>
+          )}
+        </div>
       {activeItem.type === "diagram" ? (
         <div style={styles.mermaidContainer}>
           {activeItem.content ? (
@@ -157,6 +370,7 @@ const SavedResourcesDisplay = () => {
         </div>
       )}
     </div>
+  </div>
   </div>
 )}
 
@@ -270,6 +484,38 @@ closeButton: {
   padding: "6px 12px",
   cursor: "pointer",
 },
+printButton: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "12px 14px",
+      fontSize: "16px",
+      color: "white",
+      backgroundColor: "#272727ff",
+      border: "none",
+      borderRadius: "30px",
+      cursor: "pointer",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #272727ff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "translateY(0)",
+    },
+      dwnldButton: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "12px 14px",
+      fontSize: "16px",
+      color: "white",
+      backgroundColor: "#000c3aff",
+      border: "none",
+      borderRadius: "30px",
+      cursor: "pointer",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #000c3aff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "translateY(0)",
+    },
 
 };
 

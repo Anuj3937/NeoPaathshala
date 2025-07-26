@@ -153,7 +153,6 @@ async def get_lesson_plans(user_id: str):
             (user_id,)
         )
         results = cursor.fetchall()
-        print(results)
         return {"lesson_plans": results}
 
     except Exception as e:

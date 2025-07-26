@@ -2,7 +2,8 @@ import React, { useState,useRef } from "react";
 import { Save,Camera,Printer,FileDown,IterationCw } from "lucide-react";
 import jsPDF from "jspdf";
 import "./print.css";  
-import { saveContent } from './storage'; 
+import { saveContent } from './storage';
+ 
 function ContentGenerator({ data, onBack, setResponseData }) {
   const printRef = useRef();
   const [selectedGrade, setSelectedGrade] = useState(data.grade_levels?.[0]);
@@ -261,9 +262,12 @@ const handleDownloadPDF = () => {
       color:'#edd8fcff ',
       padding: "16px 12px",
       borderRadius: "30px",
-      border: "1px solid #43086dff ",
+      border: "none",
       cursor: "pointer",
-      marginTop: "8px",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #2c0830ff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out", 
+      transform: "translateY(0)",
     },
     selectionSection: {
       padding: "12px",

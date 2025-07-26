@@ -176,7 +176,7 @@ def generate_and_store_content(grade_level, content_type, prompt, user_id, sessi
         try:
             parsed = safe_parse_generated_content(response)
             print(f"✅ Generated content for Grade {grade_level}, Type {content_type}")
-            print(response)
+            # print(response)
             return parsed
         except ValueError as e:
             print(f"❌ Failed to parse content for Grade {grade_level}, Type {content_type} - {e}")
