@@ -9,7 +9,7 @@ function App() {
   const [responseData, setResponseData] = useState(null);
   
   const handleQuerySubmit = async (query) => {
-    const res = await fetch("http://192.168.29.232:8000/parse_and_map/", {
+    const res = await fetch("http://localhost:8000/parse_and_map/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: query }),

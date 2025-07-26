@@ -53,17 +53,21 @@ from datetime import datetime, timedelta
 
 @app.put("/lesson-plans/{lesson_id}/push-tomorrow")
 async def push_lesson_tomorrow(lesson_id: str):
+    print("Running",lesson_id)
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     try:
-        cursor.execute("""SELECT date FROM lesson_plans WHERE lesson_id = ?""", (lesson_id,))
+        print("exec")
+        cursor.execute("""SELECT date FROM lesson_plans WHERE id = ?""", (lesson_id,))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Lesson not found")
-
+        print(row[0])
         current_date = row[0]
+        print("getting working day")
         new_date = get_next_working_day(current_date)
-        cursor.execute("UPDATE lesson_plans SET date = ? WHERE lesson_id = ?", (new_date, lesson_id))
+        print(f"moving from {row[0]} to {new_date}")
+        cursor.execute("UPDATE lesson_plans SET date = ? WHERE id = ?", (new_date, lesson_id))
         conn.commit()
 
         return {"message": f"Lesson pushed to {new_date}"}
@@ -149,6 +153,7 @@ async def get_lesson_plans(user_id: str):
             (user_id,)
         )
         results = cursor.fetchall()
+        print(results)
         return {"lesson_plans": results}
 
     except Exception as e:
