@@ -1004,7 +1004,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#000000ff",
+    backgroundColor: "#5a5a5aff",
     overflow:"hidden",
   },
   loading: {

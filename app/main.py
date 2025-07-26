@@ -165,11 +165,13 @@ async def get_lesson_plans(user_id: str):
 # ---------- Request Schema ----------
 class PromptRequest(BaseModel):
     prompt: str
+    selected_language: str # <--- ADD THIS LINE
 
 # ---------- Endpoint ----------
 @app.post("/parse_and_map/")
 async def parse_and_map(req: PromptRequest):
     prompt = req.prompt
+    selected_language = req.selected_language 
     # Session Creation
     sess = await sessions.create_session(app_name ="neo",user_id="1234")
 
@@ -220,7 +222,7 @@ async def parse_and_map(req: PromptRequest):
             print("Failed to parse  culture JSON:", e)
         print(syllabus_str)
         for ty in content_types:
-            builder_prompt = f"Grade Level:{grade}\n{mapping_prompt}\nContent Type:{ty}"
+            builder_prompt = f"Grade Level:{grade}\n{mapping_prompt}\nContent Type:{ty} and also mention the content to be generated in this language: {selected_language}"
             enriched_prompt = run_agent(enricher_agent,sess.user_id,sess.id,builder_prompt)
             # print(f"Prompt for grade {grade} and content type :{ty} :\n{enriched_prompt}")
             content[grade][ty] = generate_and_store_content(grade,ty,enriched_prompt,sess.user_id,sess.id)
@@ -229,7 +231,8 @@ async def parse_and_map(req: PromptRequest):
         "grade_levels": grade_levels,
         "content_types": content_types,
         "cultural_refs": cultural_refs,
-        "generated_content": content
+        "generated_content": content,
+        "language":selected_language
     }
 
 class LessonPlanRequest(BaseModel):

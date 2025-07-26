@@ -18,14 +18,31 @@ function App() {
     document.body.setAttribute('data-theme', theme);
   }, [theme]);
   
-  const handleQuerySubmit = async (query) => {
-    const res = await fetch("http://localhost:8000/parse_and_map/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: query }),
-    });
-    const data = await res.json();
-    setResponseData(data);
+  const handleQuerySubmit = async (query, selectedLanguage) => {
+    try {
+      const res = await fetch("http://localhost:8000/parse_and_map/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: query,
+          selected_language: selectedLanguage // 🌟 SEND selected_language here
+        }),
+      });
+
+      if (!res.ok) {
+        // Handle HTTP errors
+        const errorData = await res.json();
+        throw new Error(`HTTP error! status: ${res.status}, detail: ${errorData.detail || 'Unknown error'}`);
+      }
+
+      const data = await res.json();
+      setResponseData(data);
+    } catch (error) {
+      console.error("Error submitting query:", error);
+      alert(`Failed to get response from server: ${error.message}`);
+      // Optionally clear responseData or set an error state
+      setResponseData(null);
+    }
   };
 
   return (
