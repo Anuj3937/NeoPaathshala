@@ -1,8 +1,8 @@
 import React, { useState,useRef } from "react";
-import { Camera,Printer,FileDown,IterationCw } from "lucide-react";
+import { Save,Camera,Printer,FileDown,IterationCw } from "lucide-react";
 import jsPDF from "jspdf";
 import "./print.css";  
-
+import { saveContent } from './storage'; 
 function ContentGenerator({ data, onBack, setResponseData }) {
   const printRef = useRef();
   const [selectedGrade, setSelectedGrade] = useState(data.grade_levels?.[0]);
@@ -26,6 +26,16 @@ function decodeHTMLEntities(html) {
   txt.innerHTML = html;
   return txt.value;
 }
+const handleSave = async () => {
+  if (!content) return alert("No content to save.");
+  try {
+    await saveContent(selectedGrade, selectedType, data.topic, content);
+    alert("✅ Content saved successfully.");
+  } catch (e) {
+    console.error("Save failed:", e);
+    alert("❌ Failed to save content.");
+  }
+};
 
   // 2️⃣ Download as PDF
 const handleDownloadPDF = () => {
@@ -147,7 +157,7 @@ const handleDownloadPDF = () => {
   const handleRegen = async (grade, contentType) => {
     try {
       const promptString = `Generate a ${contentType} for grade ${grade} on the topic "${data.topic}"`;
-      const res = await fetch("http://localhost:8000/parse_and_map/", {
+      const res = await fetch("http://192.168.29.232:8000/parse_and_map/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: promptString }),
@@ -199,9 +209,13 @@ const handleDownloadPDF = () => {
       color: "#023a05",
       backgroundColor: "#75ff7b",
       padding: "15px 24px",
-      borderRadius: "50px 0 0 50px",
       border: "none",
+      borderRadius: "30px",
       cursor: "pointer",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #272727ff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "translateY(0)",
     },
     headerTitle: {
       fontSize: "24px",
@@ -270,22 +284,34 @@ const handleDownloadPDF = () => {
     },
     buttonBase: {
       padding: "8px 16px",
-      borderRadius: "24px",
+      borderRadius: "21px",
+      fontSize:'16px',
       fontWeight: 500,
       cursor: "pointer",
       border: "none",
       outline: "none",
-      transition: "background-color 0.2s",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #2c2c2cff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "background-color 0.2s translateY(0)",
     },
     buttonDefault: {
       backgroundColor: "#e5e7eb",
       color: "#4b5563",
     },
     buttonGradeSelected: {
-      backgroundColor: "#4f46e5",
-      fontSize:'21px',
-      padding:'12px 18px',
+      backgroundColor: "#4f46e5", // Indigo
+      fontSize: "21px",
+      padding: "12px 22px",
       color: "white",
+      border: "none",
+      borderRadius: "24px",
+      cursor: "pointer",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #26236b", // Main "pressed" shadow
+      transition: "transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out",
+      transform: "translateY(0)",
+      position: "relative", // Required to simulate press-in effect
     },
     buttonTypeSelected: {
       backgroundColor: "#df8108ff",
@@ -293,6 +319,13 @@ const handleDownloadPDF = () => {
       fontSize:'21px',
       fontWeight:'Bold',
       padding:'12px 18px',
+      border: "none",
+      borderRadius: "30px",
+      cursor: "pointer",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #f12323ff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "translateY(0)",
     },
     contentDisplayContainer: {
       padding: "16px",
@@ -325,7 +358,7 @@ const handleDownloadPDF = () => {
       display: "flex",
       alignItems: "center",
       gap: "8px",
-      padding: "12px 14px",
+      padding: "12px 20px",
       fontSize: "16px",
       color: "white",
       backgroundColor: "#006b07",
@@ -333,7 +366,11 @@ const handleDownloadPDF = () => {
       borderRadius: "30px",
       cursor: "pointer",
       marginBottom: "12px",
+      boxShadow: "0 6px 0 #004a05, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "translateY(0)",
     },
+    
     printButton: {
       display: "flex",
       alignItems: "center",
@@ -341,11 +378,14 @@ const handleDownloadPDF = () => {
       padding: "12px 14px",
       fontSize: "16px",
       color: "white",
-      backgroundColor: "#000000ff",
+      backgroundColor: "#272727ff",
       border: "none",
       borderRadius: "30px",
       cursor: "pointer",
       marginBottom: "12px",
+      boxShadow: "0 6px 0 #272727ff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "translateY(0)",
     },
       dwnldButton: {
       display: "flex",
@@ -359,6 +399,25 @@ const handleDownloadPDF = () => {
       borderRadius: "30px",
       cursor: "pointer",
       marginBottom: "12px",
+      boxShadow: "0 6px 0 #000c3aff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out",
+      transform: "translateY(0)",
+    },
+    saveButton: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "12px 14px",
+      fontSize: "16px",
+      color: "white",
+      backgroundColor: "#f12323ff",
+      border: "none",
+      borderRadius: "30px",
+      cursor: "pointer",
+      marginBottom: "12px",
+      boxShadow: "0 6px 0 #b11b1bff, 0 8px 15px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.1s ease-in-out", 
+      transform: "translateY(0)",
     },
     actions:{
       display:'flex',
@@ -369,7 +428,19 @@ const handleDownloadPDF = () => {
   return (
     <div style={styles.container}>
       <div style={styles.topBar}>
-        <button style={styles.backButton} onClick={onBack}>
+        <button style={styles.backButton} onClick={onBack}
+          onMouseDown={(e) => {
+            e.currentTarget.style.transform = "translateY(3px)";
+            e.currentTarget.style.boxShadow = "0 2px 0 #1a4e16ff";
+          }}
+          onMouseUp={(e) => {
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = "0 6px 0 #1a4e16ff";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = "0 6px 0 #1a4e16ff";
+          }}>
           Back
         </button>
         <h2 style={styles.headerTitle}>📚 Generated Content</h2>
@@ -385,6 +456,18 @@ const handleDownloadPDF = () => {
             <button
               style={styles.showButton}
               onClick={() => setShowCulturalRefs((v) => !v)}
+                onMouseDown={(e) => {
+                e.currentTarget.style.transform = "translateY(3px)";
+                e.currentTarget.style.boxShadow = "0 2px 0 #26236b";
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 6px 0 #26236b";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 6px 0 #26236b";
+              }}
             >
               {showCulturalRefs
                 ? "Hide Cultural References"
@@ -412,6 +495,18 @@ const handleDownloadPDF = () => {
                       ? styles.buttonGradeSelected
                       : styles.buttonDefault),
                   }}
+                    onMouseDown={(e) => {
+                        e.currentTarget.style.transform = "translateY(3px)";
+                        e.currentTarget.style.boxShadow = "0 2px 0 #26236b";
+                      }}
+                      onMouseUp={(e) => {
+                        e.currentTarget.style.transform = "translateY(0)";
+                        e.currentTarget.style.boxShadow = "0 6px 0 #26236b";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = "translateY(0)";
+                        e.currentTarget.style.boxShadow = "0 6px 0 #26236b";
+                      }}
                 >
                   {grade.toUpperCase()}
                 </button>
@@ -432,6 +527,18 @@ const handleDownloadPDF = () => {
                       ? styles.buttonTypeSelected
                       : styles.buttonDefault),
                   }}
+                  onMouseDown={(e) => {
+                    e.currentTarget.style.transform = "translateY(3px)";
+                    e.currentTarget.style.boxShadow = "0 2px 0 #3f3721ff";
+                  }}
+                  onMouseUp={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 6px 0 #3f3415ff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 6px 0 #3f3415ff";
+                  }}
                 >
                   {type.toUpperCase()}
                 </button>
@@ -447,25 +554,100 @@ const handleDownloadPDF = () => {
             <button
               style={styles.regenButton}
               onClick={() => handleRegen(selectedGrade, selectedType)}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #004a05";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #004a05, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #004a05, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
             >
               <IterationCw />
               Regenerate
             </button>
+            <button onClick={handleSave} style={styles.saveButton}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #b11b1bff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #b11b1bff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #b11b1bff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
+            <Save /> Save
+          </button>
             {selectedType === "diagram" ? (
-            <button style={styles.dwnldButton} onClick={handleDownloadImage}>
+            <button style={styles.dwnldButton} onClick={handleDownloadImage}                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #111111ff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
               <Camera color="#ffffff" /> Download PNG
             </button>
           ) : (
             <>
-              <button onClick={handleDownloadPDF} style={styles.dwnldButton}>
+              <button onClick={handleDownloadPDF} style={styles.dwnldButton}
+                              onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #00031dff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px #00031dff)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #00031dff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
                 <FileDown color="#ffffff" /> Download PDF
               </button>
-              <button onClick={handlePrint} style={styles.printButton}>
+              <button onClick={handlePrint} style={styles.printButton}
+                              onMouseDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.boxShadow = "0 2px 0 #000000ff";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #111111ff, 0 8px 15px #000000ff";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 0 #000000ff, 0 8px 15px rgba(0, 0, 0, 0.2)";
+                }}
+            >
                 <Printer color="#ffffff" /> Print
               </button>
             </>
           )}
-
         </div>
             <div ref={printRef} className="printable-content">
             {selectedType === "diagram" ? (

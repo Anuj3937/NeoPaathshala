@@ -1,18 +1,18 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from agents import prompt_parser, culture_agent, mapper_agent,enricher_agent ,content_generator_agent
-from google.adk.sessions import InMemorySessionService  # type: ignore
-from google.adk.runners import Runner  # type: ignore
-from google.genai import types
+from agents import prompt_parser, culture_agent, mapper_agent,enricher_agent
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import os
-import requests
 import json
+from task import dispatch_generation
 from collections import defaultdict
+from fastapi import FastAPI, HTTPException
+from typing import List
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from flow import generate_and_store_content ,run_agent ,geoip,extract_json_from_response,sessions
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-API_KEY = os.getenv("MAPS_API")
+import os
 # ---------- App Setup ----------
 app = FastAPI()
 app.add_middleware(
@@ -23,176 +23,145 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-sessions = InMemorySessionService()
 
-# ---------- Runner Helper ----------
-def run_agent(agent, user_id: str, session_id: str, prompt: str):
-    runner = Runner(app_name="neo", agent=agent, session_service=sessions)
-    content = types.Content(role="User",parts=[types.Part(text=prompt)])
-    events = runner.run(
-        user_id=user_id,
-        session_id=session_id,
-        new_message=content
-    )
-    for event in events:
-        if event.is_final_response():
-            final_response = event.content.parts[0].text
-            return final_response
+PASSWORD = os.getenv("SUPPABASE_PWD")
+# Reuse DB connection function
+def get_db_connection():
+    return psycopg2.connect(
+    host="aws-0-ap-south-1.pooler.supabase.com",
+    database="postgres",
+    user="postgres.tzcnbvcxnvwunzhopton",
+    password=f"{PASSWORD}",
+    port="6543"
+)
 
+from datetime import datetime, timedelta
+
+class HolidayRequest(BaseModel):
+    date: str  # format: YYYY-MM-DD
+    user_id: str
+
+def get_next_working_day(start_date: datetime):
+    next_day = start_date + timedelta(days=1)
+    print("started")
+    while next_day.weekday() == 6 or next_day.weekday() == 5:
+        next_day += timedelta(days=1)
+    print("ended")
+    return next_day
+
+from datetime import datetime, timedelta
+
+@app.put("/lesson-plans/{lesson_id}/push-tomorrow")
+async def push_lesson_tomorrow(lesson_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cursor.execute("""SELECT date FROM lesson_plans WHERE lesson_id = ?""", (lesson_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Lesson not found")
+
+        current_date = row[0]
+        new_date = get_next_working_day(current_date)
+        cursor.execute("UPDATE lesson_plans SET date = ? WHERE lesson_id = ?", (new_date, lesson_id))
+        conn.commit()
+
+        return {"message": f"Lesson pushed to {new_date}"}
+    except Exception as e:
+        conn.rollback()
+        return {"error": str(e)}
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.delete("/lesson-plans/{lesson_id}")
+async def delete_lesson(lesson_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+    try:
+         # 1. Get all lessons for this user on this date
+        cursor.execute("""DELETE FROM lesson_plans WHERE lesson_id = ?""", (lesson_id,))
+        conn.commit()
+        return {"message": "Lesson deleted successfully"}
+    except Exception as e:
+        conn.rollback()
+        return {"error": str(e)}
+
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.put("/mark-holiday")
+async def mark_holiday(data: HolidayRequest):
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        holiday_date = datetime.strptime(data.date, "%Y-%m-%d").date()
+        print("triggered")
+        # 1. Get all lessons for this user on this date
+        cursor.execute("""
+            SELECT * FROM lesson_plans
+            WHERE user_id = %s AND date >= %s
+            ORDER BY date
+        """, (data.user_id, holiday_date))
+        lessons = cursor.fetchall()
+        # print(lessons)
+        # 2. For each lesson, find next working day and update
+        for i,lesson in enumerate(lessons):
+            print(f"lesson {i}/{len(lessons)}")
+            current_date = holiday_date
+            next_working_date = get_next_working_day(current_date)
+            print(next_working_date)
+            cursor.execute("""
+                UPDATE lesson_plans
+                SET date = %s
+                WHERE id = %s
+            """, (next_working_date, lesson['id']))
+            print(f"{len(lessons)} lessons moved from {holiday_date} to next working day.")
+            conn.commit()
+        return {"message": f"{len(lessons)} lessons moved from {holiday_date} to next working day."}
+
+    except Exception as e:
+        conn.rollback()
+        return {"error": str(e)}
+
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/lesson-plans/{user_id}")
+async def get_lesson_plans(user_id: str):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute(
+            """
+            SELECT date, lesson_content, lesson_grade, lesson_subject,
+                   lesson_type, user_id
+            FROM lesson_plans
+            WHERE user_id = %s
+            ORDER BY date ASC
+            """,
+            (user_id,)
+        )
+        results = cursor.fetchall()
+        return {"lesson_plans": results}
+
+    except Exception as e:
+        return {"error": str(e)}  # <-- temporarily return error message in response
+
+    finally:
+        if 'cursor' in locals(): cursor.close()
+        if 'conn' in locals(): conn.close()
 
 # ---------- Request Schema ----------
 class PromptRequest(BaseModel):
     prompt: str
 
-import re
-import base64
-
-def generate_image_base64(prompt: str) -> str:
-    from google import genai
-
-    client = genai.Client(api_key=GOOGLE_API_KEY)
-
-    result = client.models.generate_images(
-        model="models/imagen-4.0-generate-preview-06-06",
-        prompt=prompt,
-        config=dict(
-            number_of_images=1,
-            output_mime_type="image/jpeg",
-            person_generation="ALLOW_ADULT",
-            aspect_ratio="1:1",
-        ),
-    )
-
-    if not result.generated_images:
-        raise RuntimeError("No images generated.")
-
-    img_bytes = result.generated_images[0].image.image_bytes
-    base64_str = base64.b64encode(img_bytes).decode("utf-8")
-    return f"data:image/jpeg;base64,{base64_str}"
-
-def extract_json_from_response(response_text: str):
-    """
-    Attempts to extract and parse the first valid JSON object from a messy LLM response.
-    Returns a Python dict if successful, else raises ValueError.
-    """
-    try:
-        # Match the first {...} JSON object block in the response
-        match = re.search(r'\{[\s\S]*?\}', response_text)
-        if not match:
-            raise ValueError("No valid JSON object found in response.")
-
-        json_str = match.group(0)
-
-        # Try parsing it
-        parsed = json.loads(json_str)
-
-        # Optional: validate expected keys
-        if "cultural_refs" not in parsed or not isinstance(parsed["cultural_refs"], list):
-            raise ValueError("Parsed JSON missing required 'cultural_refs' list.")
-
-        return parsed
-
-    except json.JSONDecodeError as e:
-        raise ValueError(f"JSON decode error: {str(e)}")
-    except Exception as e:
-        raise ValueError(f"Unexpected error while parsing JSON: {str(e)}")
-    
-def safe_parse_generated_content(response: str) -> str:
-    """
-    Safely extracts the 'content' field from a response string.
-    If 'content' is missing but 'mermaid' is present in the text, return the whole response.
-    Returns empty string otherwise.
-    """
-    # Step 1: Try JSON parsing
-    try:
-        parsed = json.loads(response)
-        if "content" in parsed:
-            return _clean_content(parsed["content"])
-    except json.JSONDecodeError:
-        pass
-
-    # Step 2: Regex fallback for content
-    match = re.search(r'"content"\s*:\s*"([\s\S]*?)"\s*}', response)
-    if match:
-        raw_content = match.group(1)
-        try:
-            unescaped = bytes(raw_content, "utf-8").decode("unicode_escape")
-            return _clean_content(unescaped)
-        except Exception:
-            return _clean_content(raw_content)
-
-    # Step 4: Fallback to empty string
-    return ""
-
-
-import html
-
-def _clean_content(content: str) -> str:
-    """
-    Cleans up markdown-wrapped content and converts it to HTML.
-    - Decodes special characters
-    - Converts **bold** to <strong>bold</strong>
-    - Converts lines starting with ### to bolded text
-    - Converts \n to <br/>
-    """
-    # Remove triple backticks and optional language tag
-    content = content.strip()
-    if content.startswith("```") and content.endswith("```"):
-        content = re.sub(r"^```[\w]*\n?", "", content)
-        content = content.rstrip("`").strip()
-    # Remove horizontal rules or repeated dashes (3 or more)
-    content = re.sub(r"\n?-{3}\n?", "\n", content)
-    # Decode any byte-style characters into proper unicode
-    content = content.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
-
-    # Convert markdown headings (e.g., # Heading, ## Heading) to <strong>
-    content = re.sub(r"^#{1,6}\s?(.*)", r"<strong>\1</strong>", content, flags=re.MULTILINE)
-
-    # Convert *text*, **text**, ***text*** into <strong>text</strong> (allowing multiple words)
-    content = re.sub(r"\*{1,}\s*([^\*]+?)\s*\*{1,}", r"<strong>\1</strong>", content)
-
-    # Escape HTML characters to prevent injection, then unescape added tags
-    content = html.escape(content)
-    content = content.replace("&lt;strong&gt;", "<strong>").replace("&lt;/strong&gt;", "</strong>")
-
-    # Replace line breaks with <br/>
-    content = content.replace("\n", "<br/>")
-
-    return content
-    
-def generate_and_store_content(grade_level, content_type, prompt, user_id, session_id):
-            if content_type == "diagram":
-                response = generate_image_base64(prompt)
-                print(f"✅ Generated content for Grade {grade_level}, Type {content_type}")
-                return response
-            else:    
-                response = run_agent(content_generator_agent, user_id, session_id, prompt)
-                try:
-                    parsed = safe_parse_generated_content(response)
-                    print(f"✅ Generated content for Grade {grade_level}, Type {content_type}")
-                    print(response)
-                    return parsed
-                except ValueError as e:
-                    print(f"❌ Failed to parse content for Grade {grade_level}, Type {content_type} - {e}")
-                    return ""
-
-def geoip():
-    res = requests.post(
-        f"https://www.googleapis.com/geolocation/v1/geolocate?key={API_KEY}",
-        json={ "considerIp": True }
-    )
-    res.raise_for_status()
-    res1 = res.json()["location"]
-    Lat,Lng=res1['lat'],res1['lng']
-    # lat,lang = res1
-    res = requests.post(
-        f"https://maps.googleapis.com/maps/api/geocode/json?latlng={Lat},{Lng}&key={API_KEY}",
-        json={ "considerIp": True }
-    )
-    res.raise_for_status()
-    res2 = (res.json())['results'][-2]["address_components"][0]["long_name"]
-    print(res2)
-    return res2
 # ---------- Endpoint ----------
 @app.post("/parse_and_map/")
 async def parse_and_map(req: PromptRequest):
@@ -250,7 +219,19 @@ async def parse_and_map(req: PromptRequest):
         "generated_content": content
     }
 
+class LessonPlanRequest(BaseModel):
+    subjects: List[str]
+    grades: List[str]
+    start_date: str
+    end_date: str
+    saturdays_working: bool
+    second_saturday_off: bool
 
+@app.post("/generate-lesson-plans")
+async def start_plans(form: LessonPlanRequest):
+    # returns task ID of dispatch
+    task = await dispatch_generation(form.subjects, form.grades, form.start_date,form.end_date,form.saturdays_working,form.second_saturday_off)
+    return {"task_id": task}
 
 @app.get("/")
 def running():
