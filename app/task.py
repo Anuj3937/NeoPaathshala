@@ -57,7 +57,7 @@ def save_content_to_db(gen_cont, subject, grade, lesson_dates, user_id):
     for topic, content_types in gen_cont.items():
         for c_type, content in content_types.items():
             lessons.append({
-                "topic": topic,
+                "topic": lesson['topic'],
                 "type": c_type,
                 "content": content
             })
@@ -93,6 +93,7 @@ def save_content_to_db(gen_cont, subject, grade, lesson_dates, user_id):
                         "lesson_grade": grade,
                         "lesson_subject": subject,
                         "lesson_type": lesson["type"],
+                        "topic":lesson['topic'],
                         "user_id": user_id
                     })
                     lesson_index += 1
@@ -119,6 +120,7 @@ def save_content_to_db(gen_cont, subject, grade, lesson_dates, user_id):
                 "lesson_grade": grade,
                 "lesson_subject": subject,
                 "lesson_type": lesson["type"],
+                "topic":lesson['topic'],
                 "user_id": user_id
             })
             day_index_float += step
@@ -133,6 +135,7 @@ def save_content_to_db(gen_cont, subject, grade, lesson_dates, user_id):
             record["lesson_grade"],
             record["lesson_subject"],
             record["lesson_type"],
+            record['topic'],
             record["user_id"]
         ))
 
@@ -150,8 +153,8 @@ def save_content_to_db(gen_cont, subject, grade, lesson_dates, user_id):
             sql_insert_query = """
                 INSERT INTO lesson_plans (
                     date, lesson_content, lesson_grade, lesson_subject,
-                    lesson_type, user_id
-                ) VALUES (%s, %s, %s, %s, %s, %s)
+                    lesson_type, user_id,lesson_topic
+                ) VALUES (%s, %s, %s, %s, %s, %s,%s)
             """
             cursor.executemany(sql_insert_query, records_to_insert)
             conn.commit()
