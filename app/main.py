@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from agents import prompt_parser, culture_agent, mapper_agent,enricher_agent ,syllabus_agent
+from agents import prompt_parser, culture_agent, mapper_agent,enricher_agent ,syllabus_agent ,story_breaker_agent
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import json
@@ -10,9 +10,10 @@ from fastapi import FastAPI, HTTPException
 from typing import List
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from flow import generate_and_store_content ,run_agent ,geoip,extract_json_from_response,sessions
+from flow import generate_and_store_content ,run_agent ,geoip,extract_json_from_response,sessions,generate_image_base64
 load_dotenv()
 import os
+from elevenlabs.client import ElevenLabs
 # ---------- App Setup ----------
 app = FastAPI()
 app.add_middleware(
@@ -22,6 +23,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+ELEVEN_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+if not ELEVEN_API_KEY:
+    raise RuntimeError("Missing ElevenLabs API key")
+
+client = ElevenLabs(api_key=ELEVEN_API_KEY)
 
 
 PASSWORD = os.getenv("SUPPABASE_PWD")
@@ -193,7 +200,7 @@ async def parse_and_map(req: PromptRequest):
     # 2️⃣ Always Run Culture Agent
     culture_prompt = f"For the location of :{location} stick to this for the google search for the topic:{topic}"
     culture_str = run_agent(culture_agent, sess.user_id, sess.id, culture_prompt)
-    culture_refs = ""
+    cultural_refs = ""
     try:
         parsed_json = extract_json_from_response(culture_str)
         cultural_refs = parsed_json["cultural_refs"]
@@ -249,8 +256,116 @@ async def start_plans(form: LessonPlanRequest):
     task = await dispatch_generation(form.subjects, form.grades, form.start_date,form.end_date,form.saturdays_working,form.second_saturday_off)
     return {"task_id": task}
 
+class StoryToVisualRequest(BaseModel):
+    story_text: str
+    # You might want to include context like topic, grade, language for better image generation
+    topic: str
+    grade_level: str
+    selected_language: str
+
+import base64
+from fastapi import HTTPException
+
+def generate_tts_base64(texts: list[str], voice_id: str, model_id: str, output_format: str) -> list[str]:
+    audio_list = []
+    for text in texts:
+        try:
+            audio_bytes = client.text_to_speech.convert(
+                text=text,
+                voice_id=voice_id,
+                model_id=model_id,
+                output_format=output_format,
+            )
+            audio_bytes_chunks = []
+            for chunk in audio_bytes:
+                # print(chunk)
+                audio_bytes_chunks.append(chunk)
+            audio_bytes = b"".join(audio_bytes_chunks)
+            encoded = base64.b64encode(audio_bytes).decode("utf-8")
+            audio_list.append(f"data:audio/{output_format};base64,{encoded}")
+        except Exception as e:  
+            print(e)
+            raise HTTPException(status_code=500, detail=f"TTS error: {str(e)}")
+    return audio_list
+
+
+@app.post("/generate_visual_story/")
+async def break_story_into_visual_segments(req: StoryToVisualRequest):
+    """
+    Breaks down a story into an array of image generation prompts and
+    corresponding narration segments.   
+    """
+    sess = await sessions.create_session(app_name ="neo",user_id="1234")
+    raw_story_text = req.story_text
+    topic = req.topic
+    grade_level = req.grade_level
+    language = req.selected_language
+    breaker_prompt = f"Break the following story:{raw_story_text} as instructed and for reference here is the topic:{topic},grade_level:{grade_level},and language:{language}"
+    story_str = run_agent(story_breaker_agent,sess.user_id, sess.id,breaker_prompt)
+    try:
+        story_parts = json.loads(story_str)
+        narration_segments = story_parts.get('narration', [])
+        image_prompts = story_parts.get('image_prompt', [])
+        print(len(image_prompts),len(narration_segments))
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail="Failed to parse JSON from story breaker agent.")
+
+    # Call TTS
+    audio_segments = generate_tts_base64(
+        texts=narration_segments,
+        voice_id="nPczCjzI2devNBz1zQrb",
+        model_id="eleven_multilingual_v2",
+        output_format="mp3_44100_128"
+    )
+    # print(audio_segments)
+    # Call Image generation
+    generated_image_segments_raw = [generate_image_base64(prompt) for prompt in image_prompts]
+    # print(generated_image_segments_raw)
+    # --- LOGIC TO REPEAT LAST IMAGE IF NECESSARY ---
+    final_image_segments = []
+    if generated_image_segments_raw: # Ensure there's at least one image to repeat
+        last_image = generated_image_segments_raw[-1]
+        for i in range(len(narration_segments)):
+            if i < len(generated_image_segments_raw):
+                final_image_segments.append(generated_image_segments_raw[i])
+            else:
+                final_image_segments.append(last_image)
+    else:
+        # If no images were generated at all, provide a placeholder or raise an error
+        # For now, let's just append None or an empty string, you might want a default placeholder image
+        final_image_segments = [None] * len(narration_segments)
+        # Or you could raise an error:
+        # raise HTTPException(status_code=500, detail="No images were generated for the story.")
+    # --- END OF LOGIC ---
+
+    # Ensure audio_segments has the same length as narration_segments
+    # This is typically handled by generate_tts_base64, but an explicit check is good
+    if len(audio_segments) != len(narration_segments):
+        print(f"Warning: Audio segments ({len(audio_segments)}) and narration segments ({len(narration_segments)}) length mismatch.")
+        # Decide how to handle this: truncate, pad, or raise error.
+        # For simplicity, we'll assume generate_tts_base64 always matches input length.
+        # If not, you'd need similar padding logic here.
+
+    return {
+        "metadata": {
+            "topic": req.topic,
+            "grade_level": req.grade_level,
+            "language": req.selected_language
+        },
+        "segments": [
+            {
+                "narration_text": narration_segments[i],
+                "audio_base64": audio_segments[i],
+                "image_prompt": image_prompts[i] if i < len(image_prompts) else "Repeated prompt for visual continuity", # Provide a sensible prompt for repeated images
+                "image_base64": final_image_segments[i]
+            }
+            for i in range(len(narration_segments))
+        ]
+    }
+
+
 @app.get("/")
 def running():
-    return {
+    return {    
         "detail":"server running"
     }

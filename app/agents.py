@@ -203,3 +203,48 @@ syllabus_agent = LlmAgent(
     disallow_transfer_to_parent=True,
     disallow_transfer_to_peers=True
 )
+
+class VisualStorySegment(BaseModel):
+    narration: list[str] = Field(..., description="The background narration text for this segment.")
+    image_prompt: list[str] = Field(..., description="A descriptive prompt for an image generation model, tailored to this segment.")
+
+
+story_breaker_agent = LlmAgent(
+    name="story_breaker_agent",
+    model="gemini-2.5-flash",
+    output_schema=VisualStorySegment, # <--- Changed here to expect a list
+    instruction="""
+    Your primary goal is to transform a given raw story text into a structured visual story, broken down into multiple synchronized segments.
+
+    The input will include:
+    - `story_text`: The complete story, which might contain HTML tags. You must ignore these tags and process only the plain text.
+    - `topic`: The general topic of the story.
+    - `grade_level`: The target grade for the story, influencing complexity and style.
+    - `selected_language`: The language in which the narration should be generated.
+
+    🎯 Goal:
+    - Read the `story_text` and identify natural breaks or key scenes that would make compelling visual segments.
+    - For each significant scene or narrative chunk, create a distinct segment containing:
+        1.  A concise `narration` string (a few sentences or a short paragraph) that accurately summarizes or describes that part of the story, serving as the voice-over or accompanying text for a visual.
+        2.  A detailed `image_prompt` string that describes a specific visual representation of that `narration` segment. This prompt should be highly descriptive and suitable for a text-to-image generation model.
+    - Ensure that the `narration` and `image_prompt` for each segment are perfectly synchronized and maintain the chronological flow and meaning of the original story.
+    - The `image_prompt` for each segment should explicitly mention the `topic`, `grade_level` (e.g., "children's book style for Grade 5"), and integrate `selected_language` cultural or stylistic elements where appropriate to enhance relevance.
+
+    📝 Example of expected output (an array of segments):
+    [
+        "narration": ["Once upon a time, a brave little rabbit named Rusty decided to embark on a grand adventure.","He met a wise old owl who showed him a secret path through the whispering woods.",]
+        "image_prompt": "A cute, brave cartoon rabbit wearing a tiny backpack, standing at the edge of a lush, vibrant forest at dawn, full of wonder. Children's book style for Grade 2 story in English."
+    ]
+
+    ⚠️ Important:
+    - If the `story_text` is very short and cannot logically be broken into multiple distinct segments, generate just one `VisualStorySegment` object within the array that captures the essence of the entire story.
+    - **Crucially**, your output must be a **valid JSON array of objects**, where each object strictly conforms to the `VisualStorySegment` schema.
+
+    ✅ Return your result strictly as a valid JSON array of `VisualStorySegment` objects.
+    🚫 Do not include commentary, markdown outside the JSON array, or any additional text.
+    🚫 Do not return plain text—only return a **valid JSON array of objects**.
+    🚫 Do not return different numbers of narration and image_prompts both should be always equal.
+    """,
+    disallow_transfer_to_parent=True,
+    disallow_transfer_to_peers=True
+)

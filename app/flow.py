@@ -53,14 +53,13 @@ def generate_image_base64(prompt: str) -> str:
     from google import genai
 
     client = genai.Client(api_key=GOOGLE_API_KEY)
-
+    print("generating")
     result = client.models.generate_images(
         model="models/imagen-4.0-generate-preview-06-06",
         prompt=prompt,
         config=dict(
             number_of_images=1,
             output_mime_type="image/jpeg",
-            person_generation="ALLOW_ADULT",
             aspect_ratio="1:1",
         ),
     )
@@ -69,6 +68,7 @@ def generate_image_base64(prompt: str) -> str:
         raise RuntimeError("No images generated.")
 
     img_bytes = result.generated_images[0].image.image_bytes
+    print("finished")
     base64_str = base64.b64encode(img_bytes).decode("utf-8")
     return f"data:image/jpeg;base64,{base64_str}"
 
