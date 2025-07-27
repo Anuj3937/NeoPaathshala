@@ -1,0 +1,18 @@
+.text-rotate {
+  display: flex;
+  flex-wrap: wrap;
+  white-space: pre-wrap;
+  position: relative;
+}
+
+.text-rotate-word {
+  display: inline-flex;
+}
+
+.text-rotate-element {
+  display: inline-block;
+}
+
+.text-rotate-space {
+  white-space: pre;
+}

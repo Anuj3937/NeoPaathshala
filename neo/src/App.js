@@ -5,20 +5,86 @@ import SearchHome from './components/SearchHome';
 import ContentGenerator from './components/ContentGenerator';
 import WeeklyPlanner from './components/WeeklyPlanner';
 import SavedResourcesDisplay from './components/Resources';
+import LandingPage from './components/LandingPage';
 
 function App() {
+const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null); // Optional: Store user data
+  const [loading, setLoading] = useState(true); // State to handle initial auth check
   const [responseData, setResponseData] = useState(null);
-  const [theme, setTheme] = useState('dark'); // 'dark' or 'light'
+  const [theme, setTheme] = useState('dark');
+  const [serverDown, setServerDown] = useState(false);
 
-  const toggleTheme = () => {
-    setTheme((prevTheme) => (prevTheme === 'dark' ? 'light' : 'dark'));
+  // State for the rotating title word
+  const [paathshalaWords] = useState([
+    'Paathshala', 'पाठशाला', 'पाठशाळा', 'ಪಾಠಶಾಲಾ', 'પાઠશાળા', 'পাঠশালা'
+  ]);
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+
+  // Check authentication status when the app loads
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/me', {
+            method: 'GET',
+            credentials: 'include', // Important: This sends the session cookie
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.logged_in) {
+            setIsAuthenticated(true);
+            setUser(data.user);
+          }
+        }
+      } catch (error) {
+        console.error("Could not verify authentication status.", error);
+      } finally {
+        setLoading(false); // Stop loading once the check is complete
+      }
+    };
+    checkAuthStatus();
+  }, []);
+
+  // Handler for logging out
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:8000/logout', { credentials: 'include' });
+      setIsAuthenticated(false);
+      setUser(null);
+      // Redirect to the landing page by reloading
+      window.location.href = '/';
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
+  const toggleTheme = () => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+
+  // New handler for changing the title language
+  const handleTitleClick = () => {
+    setCurrentWordIndex((prevIndex) => (prevIndex + 1) % paathshalaWords.length);
   };
 
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
   }, [theme]);
   
-  const handleQuerySubmit = async (query, selectedLanguage) => {
+  useEffect(() => {
+    const healthCheck = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/");
+        if (!res.ok) throw new Error('Server not responding');
+        setServerDown(false);
+      } catch (error) {
+        setServerDown(true);
+      }
+    };
+    healthCheck();
+    const interval = setInterval(healthCheck, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+   const handleQuerySubmit = async (query, selectedLanguage) => {
     try {
       const res = await fetch("http://localhost:8000/parse_and_map/", {
         method: "POST",
@@ -47,28 +113,39 @@ function App() {
 
   return (
     <Router>
-      <div style={{ backgroundColor: 'var(--background-darker)', minHeight: '100vh' }}>
-        <Navbar theme={theme} toggleTheme={toggleTheme} />
-        <Routes>
-          <Route
-            path="/"
-            element={
-              !responseData ? (
-                <SearchHome onSubmit={handleQuerySubmit} />
-              ) : (
-                <ContentGenerator
-                  data={responseData}
-                  onBack={() => setResponseData(null)}
-                  // 🌟 ADD THIS LINE: Pass setResponseData as a prop
-                  setResponseData={setResponseData}
-                />
-              )
-            }
+      {!isAuthenticated ? (
+        <LandingPage 
+          paathshalaWord={paathshalaWords[currentWordIndex]}
+          onTitleClick={handleTitleClick}
+        />
+      ) : (
+        <div style={{ backgroundColor: 'var(--background-darker)', minHeight: '100vh' }}>
+          {serverDown && <div className="offline-banner">Currently Offline</div>}
+          <Navbar 
+            theme={theme} 
+            toggleTheme={toggleTheme} 
+            paathshalaWord={paathshalaWords[currentWordIndex]}
+            onTitleClick={handleTitleClick}
+            onLogout={handleLogout}
+            // You can also pass user info to the Navbar
+            user={user}
           />
-          <Route path="/weekly-calendar" element={<WeeklyPlanner />} />
-          <Route path="/resources" element={<SavedResourcesDisplay/>}/>
-        </Routes>
-      </div>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                !responseData ? (
+                  <SearchHome onSubmit={handleQuerySubmit} />
+                ) : (
+                  <ContentGenerator data={responseData} onBack={() => setResponseData(null)} />
+                )
+              }
+            />
+            <Route path="/weekly-calendar" element={<WeeklyPlanner />} />
+            <Route path="/resources" element={<SavedResourcesDisplay />} />
+          </Routes>
+        </div>
+      )}
     </Router>
   );
 }

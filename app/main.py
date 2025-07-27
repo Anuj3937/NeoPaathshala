@@ -1,4 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException # Added Request
+from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from authlib.integrations.starlette_client import OAuth
 from pydantic import BaseModel
 from agents import prompt_parser, culture_agent, mapper_agent,enricher_agent ,syllabus_agent ,story_breaker_agent
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +27,48 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SECRET_KEY")
+)
+# --- OAuth Setup ---
+oauth = OAuth()
+oauth.register(
+    name='google',
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_id=os.getenv("GOOGLE_CLIENT_ID"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+    client_kwargs={'scope': 'email openid profile'}
+)
+
+# --- Auth Routes ---
+@app.get('/login')
+async def login(request: Request):
+    redirect_uri = request.url_for('auth')
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+@app.get('/auth', name='auth') # named the route
+async def auth(request: Request):
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        request.session['user'] = token.get('userinfo')
+    except Exception as e:
+        return RedirectResponse(url='http://localhost:3000?error=auth_failed')
+    return RedirectResponse(url='http://localhost:3000/')
+
+@app.get('/api/me')
+async def get_current_user(request: Request):
+    user = request.session.get('user')
+    if user:
+        print(user)
+        return {"logged_in": True, "user": user}
+    return {"logged_in": False}
+
+@app.get('/logout')
+async def logout(request: Request):
+    request.session.pop('user', None)
+    return {"message": "Logged out successfully"}
 
 ELEVEN_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 if not ELEVEN_API_KEY:
@@ -112,28 +158,81 @@ async def mark_holiday(data: HolidayRequest):
     try:
         holiday_date = datetime.strptime(data.date, "%Y-%m-%d").date()
         print("triggered")
-        # 1. Get all lessons for this user on this date
+
+        # 1. Get all lessons for this user on or after this date, ordered by date
         cursor.execute("""
-            SELECT * FROM lesson_plans
+            SELECT id, date, topic FROM lesson_plans
             WHERE user_id = %s AND date >= %s
-            ORDER BY date
+            ORDER BY date ASC, id ASC
         """, (data.user_id, holiday_date))
-        lessons = cursor.fetchall()
-        # print(lessons)
-        # 2. For each lesson, find next working day and update
-        for i,lesson in enumerate(lessons):
-            print(f"lesson {i}/{len(lessons)}")
-            current_date = holiday_date
-            next_working_date = get_next_working_day(current_date)
-            # print(next_working_date)
-            # cursor.execute("""
-            #     UPDATE lesson_plans
-            #     SET date = %s
-            #     WHERE id = %s
-            # """, (next_working_date, lesson['id']))
-            print(f"{len(lessons)} lessons moved from {holiday_date} to {next_working_date}.")
-            # conn.commit()
-        return {"message": f"{len(lessons)} lessons moved from {holiday_date} to next working day."}
+        lessons_to_shift = cursor.fetchall()
+
+        if not lessons_to_shift:
+            return {"message": f"No lessons found on or after {holiday_date} for user {data.user_id}."}
+
+        # 2. Group lessons by their original date
+        lessons_by_original_date: Dict[date, List[Dict]] = defaultdict(list)
+        for lesson in lessons_to_shift:
+            lessons_by_original_date[lesson['date']].append(lesson)
+
+        # Get unique original dates, sorted
+        sorted_original_dates = sorted(lessons_by_original_date.keys())
+
+        # Keep track of the last date that has been assigned to a group of lessons
+        # Initialize it to the day *before* the holiday, so the first shift correctly moves past the holiday.
+        last_assigned_date = holiday_date - timedelta(days=1)
+
+        # Set to keep track of all dates that are now occupied by shifted lessons (including the holiday itself)
+        # This is crucial for `get_next_working_day` to find truly available slots
+        # all_occupied_dates: Set[date] = {holiday_date}
+
+        total_lessons_moved = 0
+        updates_to_execute = [] # Store all updates to commit at once
+
+        for original_date in sorted_original_dates:
+            lessons_in_group = lessons_by_original_date[original_date]
+
+            # The new date for this group must be after the last assigned date
+            # and also not the holiday itself, and not a weekend.
+            
+            # Start checking from the day after the maximum of (original_date, last_assigned_date)
+            # This ensures cascading: if a previous group pushed dates far out, this group starts from there.
+            # If this group's original date is naturally later, it starts from its original date.
+            check_from_date = max(original_date, last_assigned_date)
+
+            # Find the next available working day for this group
+            new_date_for_group = get_next_working_day(check_from_date)
+
+            # If the original_date itself was the holiday, ensure it moves at least one day past it.
+            # This handles the specific case where original_date == holiday_date
+            if original_date == holiday_date:
+                # The `get_next_working_day` already handles `holiday_date` being in `all_occupied_dates`
+                pass # No special adjustment needed here if get_next_working_day is robust
+
+            # Add the new date for this group to the set of all occupied dates
+            # all_occupied_dates.add(new_date_for_group)
+            last_assigned_date = new_date_for_group # Update the last assigned date for the next iteration
+
+            # Prepare updates for all lessons in this group
+            for lesson in lessons_in_group:
+                if lesson['date'] != new_date_for_group: # Only update if date actually changes
+
+                    updates_to_execute.append((new_date_for_group, lesson['id']))
+                    total_lessons_moved += 1
+                    print(f"Lesson ID {lesson['id']} moved from {lesson['date']} to {new_date_for_group}.")
+
+        # 3. Execute all updates in a single transaction
+        for new_date, lesson_id in updates_to_execute:
+            print(lesson_id,new_date)
+        #     cursor.execute("""
+        #         UPDATE lesson_plans
+        #         SET date = %s
+        #         WHERE id = %s
+        #     """, (new_date, lesson_id))
+        
+        # conn.commit() # Commit all changes
+
+        return {"message": f"{total_lessons_moved} lessons moved due to holiday on {holiday_date}."}
 
     except Exception as e:
         conn.rollback()

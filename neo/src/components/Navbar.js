@@ -2,10 +2,10 @@ import React from 'react';
 import { Home, FolderOpen, Calendar, Power, Sun, Moon } from 'lucide-react';
 import { useLocation, useNavigate } from "react-router-dom";
 
-const NavBar = ({ theme, toggleTheme }) => {
+const NavBar = ({ theme, toggleTheme, paathshalaWord, onTitleClick, onLogout, user }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  // (isActive, getPopButtonStyles, handleMouseDown, handleMouseUp functions remain the same)
+  
   const isActive = (path) => location.pathname === path;
   
   const getPopButtonStyles = (path, activeColor, shadowColor) => ({
@@ -26,11 +26,13 @@ const NavBar = ({ theme, toggleTheme }) => {
   
   const handleMouseDown = (e, path, shadowColor) => {
       e.currentTarget.style.transform = "translateY(2px)";
+      // Corrected: Template literal for boxShadow
       e.currentTarget.style.boxShadow = `0 1px ${isActive(path) ? shadowColor : "var(--shadow-gray)"}`;
   };
 
   const handleMouseUp = (e, path, shadowColor) => {
       e.currentTarget.style.transform = "translateY(0)";
+      // Corrected: Template literal for boxShadow
       e.currentTarget.style.boxShadow = `0 3px ${isActive(path) ? shadowColor : "var(--shadow-gray)"}`;
   };
 
@@ -45,8 +47,18 @@ const NavBar = ({ theme, toggleTheme }) => {
 
   return (
     <nav style={navStyle}>
-      <div style={{ fontSize: '22px', fontWeight: 'bold', color: 'var(--text-primary)', marginRight: '32px' }}>
-        NeoPaathshala
+      {/* NeoPaathshala Title with Dynamic Word and Click Handler */}
+      <div 
+        style={{ 
+          fontSize: '22px', 
+          fontWeight: 'bold', 
+          color: 'var(--text-primary)', 
+          marginRight: '32px',
+          cursor: 'pointer' // Indicate it's clickable
+        }}
+        onClick={onTitleClick} // Add the click handler
+      >
+        Neo{paathshalaWord}
       </div>
 
       <div style={{ display: 'flex', gap: '12px' }}>
@@ -76,7 +88,14 @@ const NavBar = ({ theme, toggleTheme }) => {
         </button>
       </div>
       
-      <div style={{ flex: 1 }} />
+      <div style={{ flex: 1 }} /> {/* This div pushes content to the right */}
+
+      {/* User Info (Optional - only show if `user` prop is provided) */}
+      {user && (
+        <div style={{ color: 'var(--text-secondary)', marginRight: '16px' }}>
+          Welcome, {user.name || user.email || 'User'}!
+        </div>
+      )}
 
       {/* Theme Toggle Button */}
       <button 
@@ -90,7 +109,9 @@ const NavBar = ({ theme, toggleTheme }) => {
 
       <div style={{width: '12px'}}></div> {/* Spacer */}
 
+      {/* Logout Button */}
       <button 
+        onClick={onLogout} // Use the onLogout prop
         style={getPopButtonStyles("logout", "var(--accent-red)", "var(--shadow-red)")}
         onMouseDown={(e) => handleMouseDown(e, "logout", "var(--shadow-red)")}
         onMouseUp={(e) => handleMouseUp(e, "logout", "var(--shadow-red)")}

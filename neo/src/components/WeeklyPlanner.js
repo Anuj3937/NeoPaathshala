@@ -695,13 +695,13 @@ const navigateMonth = (direction) => {
             <h3>
               {selectedDate} - {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long' })}
             </h3>
-            <button
+            {/* <button
               onClick={() => handleMarkHoliday(selectedDate)}
               style={styles.holidayButton}
             >
               <Coffee size={16} />
               Mark as Holiday
-            </button>
+            </button> */}
           </div>
 
           <div style={styles.lessonsList}>
@@ -720,12 +720,12 @@ const navigateMonth = (direction) => {
                   >
                     <Eye size={14} />
                   </button>
-                  <button
+                  {/* <button
                     onClick={() => handlePushToTomorrow(lesson.id)}
                     style={styles.actionButton}
                   >
                     <ArrowRight size={14} />
-                  </button>
+                  </button> */}
                   <button
                     onClick={() => handleDeleteLesson(lesson.id)}
                     style={styles.deleteButton}
@@ -830,45 +830,6 @@ const navigateMonth = (direction) => {
         </button>
       </div>
       <div className="actions" style={styles.actions}>
-            {/* <button
-              style={styles.regenButton}
-              onClick={() => handleRegen(selectedGrade, selectedType)}
-                onMouseDown={(e) => {
-                  e.currentTarget.style.transform = "scale(0.95)";
-                  e.currentTarget.style.boxShadow = "0 2px 0 #004a05";
-                }}
-                onMouseUp={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
-                  e.currentTarget.style.boxShadow =
-                    "0 6px 0 #004a05, 0 8px 15px rgba(0, 0, 0, 0.2)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
-                  e.currentTarget.style.boxShadow =
-                    "0 6px 0 #004a05, 0 8px 15px rgba(0, 0, 0, 0.2)";
-                }}
-            >
-              <IterationCw />
-              Regenerate
-            </button> */}
-            {/* <button onClick={handleSave} style={styles.saveButton}
-                onMouseDown={(e) => {
-                  e.currentTarget.style.transform = "scale(0.95)";
-                  e.currentTarget.style.boxShadow = "0 2px 0 #b11b1bff";
-                }}
-                onMouseUp={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
-                  e.currentTarget.style.boxShadow =
-                    "0 6px 0 #b11b1bff, 0 8px 15px rgba(0, 0, 0, 0.2)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
-                  e.currentTarget.style.boxShadow =
-                    "0 6px 0 #b11b1bff, 0 8px 15px rgba(0, 0, 0, 0.2)";
-                }}
-            >
-            <Save /> Save
-          </button> */}
             {modalContent.lesson_type === "diagram" ? (
             <button style={styles.dwnldButton} onClick={handleDownloadImage}                onMouseDown={(e) => {
                   e.currentTarget.style.transform = "scale(0.95)";
