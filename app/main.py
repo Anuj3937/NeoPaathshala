@@ -314,6 +314,7 @@ async def parse_and_map(req: PromptRequest):
             mapper_result = json.loads(mapper_result_str)
             if "grade_levels" in mapper_result:
                 grade_levels = mapper_result["grade_levels"]
+                print(grade_levels)
         except json.JSONDecodeError:
             print("Grade mapper agent returned invalid JSON")
     print(grade_levels)

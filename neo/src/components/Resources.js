@@ -27,17 +27,6 @@ const SavedResourcesDisplay = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id, topic) => {
-    await deleteSavedContent(id);
-    setGroupedContent((prev) => {
-      const updated = { ...prev };
-      updated[topic] = updated[topic].filter((item) => item.id !== id);
-      if (updated[topic].length === 0) {
-        delete updated[topic];
-      }
-      return updated;
-    });
-  };
 
   // Helper function for the "pop" button style
   const getPopButtonStyles = (color, shadowColor) => ({
@@ -67,10 +56,144 @@ const SavedResourcesDisplay = () => {
   };
   
   // (handleDownloadPDF, handlePrint, etc. remain unchanged)
-  function decodeHTMLEntities(html) { /* ... (no changes needed) */ };
-  const handleDownloadImage = () => { /* ... (no changes needed) */ };
-  const handleDownloadPDF = () => { /* ... (no changes needed) */ };
-  const handlePrint = () => { /* ... (no changes needed) */ };
+ const handleDownloadImage = () => {
+    if (!activeItem.content || !activeItem.content.startsWith("data:image/")) {
+      return alert("No image content to download");
+    }
+    const link = document.createElement("a");
+    link.href = activeItem.content;
+    link.download = `grade-${activeItem.Grade}_${activeItem.type}_${Date.now()}.png`;
+    link.click();
+  };
+  const handleDelete = async (id, type) => {
+    await deleteSavedContent(id);
+    setGroupedContent((prev) => {
+      const updated = { ...prev };
+      updated[type] = updated[type].filter((item) => item.id !== id);
+      return updated;
+    });
+  };
+  function decodeHTMLEntities(html) {
+  const txt = document.createElement("textarea");
+  txt.innerHTML = html;
+  return txt.value;
+}
+    // 2️⃣ Download as PDF
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF({
+      unit: "pt",
+      format: "letter",
+    });
+  
+    // compute printable width (page width minus horizontal margins)
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 10;
+    const printableWidth = (pageWidth + margin * 2)*1.25;
+  
+    if (activeItem.type === "diagram" && activeItem.content.startsWith("data:image/")) {
+      // embed image as before…
+      const imgProps = doc.getImageProperties(activeItem.content);
+      const imgW = printableWidth;
+      const imgH = (imgProps.height * imgW) / imgProps.width;
+      doc.addImage(activeItem.content, "PNG", margin, margin, imgW, imgH);
+    } else {
+      // 1) Normalize <br> to newline
+      let text = activeItem.content
+    .replace(/<br\s*\/?>/gi, "\n")    // <br> → newline
+    .replace(/<strong>([\s\S]*?)<\/strong>/gi, (_, inner) => {
+      // wrap bold in markers or leave as-is
+      return inner.toUpperCase();     // for instance
+    });
+      text = decodeHTMLEntities(text);
+      // 2) Strip any remaining HTML tags
+      text = text.replace(/<[^>]+>/g, "");
+  
+      // 3) Split into wrapped lines
+      const lines = doc.splitTextToSize(text, printableWidth);
+  
+      // 4) Render title and lines
+      let y = margin;
+      doc.setFontSize(14);
+      doc.text(`Grade ${activeItem.Grade} – ${activeItem.type}`, margin, y);
+      y += 24;
+      doc.setFontSize(12);
+  
+      lines.forEach((line) => {
+        if (y > doc.internal.pageSize.getHeight() - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.text(line, margin, y);
+        y += 16;
+      });
+    }
+  
+    doc.save(`grade-${activeItem.Grade}_${activeItem.type}.pdf`);
+  };
+  
+    // 3️⃣ Print via window.print (uses your CSS @media print rules)
+   const printableFrameRef = useRef(null);
+  
+    const handlePrint = () => {
+      // 1) Create an off-screen iframe
+      let frame = printableFrameRef.current;
+      if (!frame) {
+        frame = document.createElement("iframe");
+        frame.style.position = "fixed";
+        frame.style.right = "0";
+        frame.style.bottom = "0";
+        frame.style.width = "0";
+        frame.style.height = "0";
+        frame.style.border = "0";
+        printableFrameRef.current = frame;
+        document.body.appendChild(frame);
+      }
+  
+      const doc = frame.contentWindow.document;
+      doc.open();
+      doc.write(`
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              h1 { font-size: 18pt; margin-bottom: 12pt; }
+              p, li { font-size: 12pt; line-height: 1.4; }
+              img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
+            </style>
+          </head>
+          <body>
+            <h1>Grade ${activeItem.Grade} – ${activeItem.type}</h1>
+            ${
+              activeItem.type === "diagram" && activeItem.content.startsWith("data:image/")
+                ? `<img src="${activeItem.content}" />`
+                : (() => {
+                    // convert <br> to paragraphs
+                    let html = activeItem.content || "";
+                    // decode HTML entities
+                    const txt = document.createElement("textarea");
+                    txt.innerHTML = html;
+                    html = txt.value;
+                    // wrap <br> → </p><p>
+                    html = html
+                      .replace(/<br\s*\/?>/gi, "</p><p>")
+                      .replace(/<\/p><p>/g, "</p><p>");
+                    // ensure paragraphs
+                    if (!html.match(/^<p>/)) html = `<p>${html}</p>`;
+                    return html;
+                  })()
+            }
+          </body>
+        </html>
+      `);
+      doc.close();
+  
+      // 2) Wait for images to load (if any), then trigger print
+      frame.onload = () => {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        // optional: remove the iframe after printing
+      };
+    }
 
   const styles = {
     mainContainer: {

@@ -1,9 +1,9 @@
 // Get color for different subjects
 import Select from "react-select";
 import jsPDF from "jspdf";
-import { Calendar, Filter, Plus, Eye, Trash2, ArrowRight, Coffee } from "lucide-react";
-import React, { useState, useEffect ,useRef} from "react";
-import { Save,Camera,Printer,FileDown,IterationCw } from "lucide-react";
+import { Calendar, Filter, Plus, Eye, Trash2} from "lucide-react";
+import React, { useState, useEffect ,useRef,useCallback} from "react";
+import { Camera,Printer,FileDown} from "lucide-react";
 // Import the new IndexedDB functions for the weekly planner
 import { getWeeklyPlan, saveWeeklyPlan } from './storage';
 
@@ -218,53 +218,79 @@ const handleDownloadPDF = () => {
    * 2. If successful, saves the data to IndexedDB for offline use.
    * 3. If the server is unreachable, it attempts to load data from IndexedDB.
    */
-  const fetchLessonData = async () => {
+// Use a ref to store the latest lessonData without making it a dependency of useCallback
+  const latestLessonData = useRef(lessonData);
+
+  // Update the ref whenever lessonData changes
+  useEffect(() => {
+    latestLessonData.current = lessonData;
+  }, [lessonData]);
+
+  const fetchLessonData = useCallback(async () => {
     setIsLoading(true);
+
+    let localLessons = [];
+
+    // --- PHASE 1: Attempt to load from local IndexedDB first ---
     try {
-      // 1. Attempt to fetch fresh data from the server
-      const response = await fetch(`http://localhost:8000/lesson-plans/${userId}`);
-      if (!response.ok) {
-        // This will trigger the catch block below
-        throw new Error('Server connection failed.');
+      localLessons = await getWeeklyPlan();
+      if (localLessons && localLessons.length > 0) {
+        console.log("Immediately loaded data from IndexedDB for faster display.");
+        setLessonData(localLessons);
+        setFilteredData(localLessons);
+        setHasData(true);
+      } else {
+        console.log("No initial data found in local storage.");
+        setHasData(false);
       }
-      
-      const data = await response.json();
-      const lessonPlans = data.lesson_plans || [];
-      const lessonsWithIds = lessonPlans.map((lesson, index) => ({
-          ...lesson,
-          id: lesson.id || `lesson_${index}_${Date.now()}` // Ensure a unique ID for IndexedDB
-      }));
-        
-      // 2. If fetch is successful, save data locally to IndexedDB
-      await saveWeeklyPlan(lessonsWithIds);
-      console.log("Fetched data from server and saved to IndexedDB.");
-
-      setLessonData(lessonsWithIds);
-      setFilteredData(lessonsWithIds);
-      setHasData(lessonsWithIds.length > 0);
-
-    } catch (error) {
-      console.error("Server fetch failed. Attempting to load from local storage:", error);
-      // 3. If server fetch fails, load data from IndexedDB
-      try {
-        const localData = await getWeeklyPlan();
-        if (localData && localData.length > 0) {
-            console.log("Successfully loaded data from IndexedDB.");
-            setLessonData(localData);
-            setFilteredData(localData);
-            setHasData(true);
-        } else {
-            console.log("No data found in local storage.");
-            setHasData(false);
-        }
-      } catch (dbError) {
-          console.error("Failed to load data from IndexedDB:", dbError);
-          setHasData(false); // No online or local data available
-      }
+    } catch (dbError) {
+      console.error("Failed to load initial data from IndexedDB:", dbError);
+      setHasData(false);
     } finally {
       setIsLoading(false);
     }
-  };
+
+    // --- PHASE 2: Fetch latest data from the server and update local/UI ---
+    try {
+      const response = await fetch(`http://localhost:8000/lesson-plans/${userId}`);
+      if (!response.ok) {
+        throw new Error('Server connection failed or data unavailable.');
+      }
+
+      const data = await response.json();
+      const serverLessons = data.lesson_plans || [];
+      const lessonsWithIds = serverLessons.map((lesson, index) => ({
+        ...lesson,
+        id: lesson.id || `lesson_${index}_${Date.now()}`
+      }));
+
+      // Use the ref to compare with the *latest* data without causing re-runs
+      if (JSON.stringify(latestLessonData.current) !== JSON.stringify(lessonsWithIds)) {
+        await saveWeeklyPlan(lessonsWithIds);
+        console.log("Fetched latest data from server and updated IndexedDB and UI.");
+        setLessonData(lessonsWithIds);
+        setFilteredData(lessonsWithIds);
+        setHasData(lessonsWithIds.length > 0);
+      } else {
+        console.log("Server data is identical to current data. No update needed.");
+      }
+
+    } catch (error) {
+      console.error("Failed to fetch latest data from server. Displaying local data if available:", error);
+    }
+  }, [userId]); // Removed lessonData from dependencies
+
+  useEffect(() => {
+    fetchLessonData();
+  }, [fetchLessonData]); // Dependencies: userId for fetch, lessonData for comparison
+
+  // Effect to call the fetch function when the component mounts or userId changes
+  // useEffect(() => {
+  //   fetchLessonData();
+  // }, [fetchLessonData]); // `fetchLessonData` is a dependency because it's wrapped in useCallback
+
+  // Render logic based on states
+
 
   // Filter logic
 

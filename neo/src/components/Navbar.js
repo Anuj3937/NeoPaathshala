@@ -92,8 +92,8 @@ const NavBar = ({ theme, toggleTheme, paathshalaWord, onTitleClick, onLogout, us
 
       {/* User Info (Optional - only show if `user` prop is provided) */}
       {user && (
-        <div style={{ color: 'var(--text-secondary)', marginRight: '16px' }}>
-          Welcome, {user.name || user.email || 'User'}!
+        <div style={{ color: 'var(--text-secondary)', marginRight: '20px' }}>
+          Welcome, {user.name || user.email || 'User'} !
         </div>
       )}
 

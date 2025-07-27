@@ -137,7 +137,7 @@ const [isAuthenticated, setIsAuthenticated] = useState(false);
                 !responseData ? (
                   <SearchHome onSubmit={handleQuerySubmit} />
                 ) : (
-                  <ContentGenerator data={responseData} onBack={() => setResponseData(null)} />
+                  <ContentGenerator data={responseData} onBack={() => setResponseData(null)} setResponseData={setResponseData} />
                 )
               }
             />

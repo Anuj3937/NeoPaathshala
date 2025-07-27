@@ -597,6 +597,7 @@ function ContentGenerator({ data, onBack, setResponseData }) {
             color: '#000',
             padding: '16px',
             borderRadius: '6px',
+            maxheight:'800px',
         },
         textContent: {
             whiteSpace: "pre-wrap",
@@ -709,7 +710,7 @@ function ContentGenerator({ data, onBack, setResponseData }) {
                                             : styles.buttonDefault),
                                     }}
                                 >
-                                    interactive_story
+                                    Visual Story
                                 </button>
                             )}
                         </div>

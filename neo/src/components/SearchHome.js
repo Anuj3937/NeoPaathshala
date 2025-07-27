@@ -185,14 +185,14 @@ const SearchHome = ({ onSubmit }) => {
 
   return (
     <div style={styles.mainContent}>
-      <div style={styles.welcomeContainer}>
-        <h1 style={styles.welcomeTitle}>
-          Your AI-Powered Teaching Co-Pilot
-        </h1>
-        <p style={styles.welcomeSubtitle}>
-          From Prompt to Podium. Effortless Lessons, Inspired Learning.
-        </p>
-      </div>
+        <div style={styles.welcomeContainer}>
+          <h1 style={styles.welcomeTitle}>
+            Your AI-Powered Teaching Co-Pilot
+          </h1>
+          <p style={styles.welcomeSubtitle}>
+            From Prompt to Podium. Effortless Lessons, Inspired Learning.
+          </p>
+        </div>
 
       <div style={styles.searchContainer}>
         <input
