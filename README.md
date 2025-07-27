@@ -48,8 +48,7 @@ NeoPaathshaala is an AI assistant that revolutionizes the teaching workflow by p
 
 ## 🚀 Getting Started
 
-Follow these instructions to set up and run the project on your local machine for development and testing purposes.
-
+This project is structured into two main folders: `app` (Python backend) and `neo` (React frontend). Follow the steps below to get both services running locally.
 ### Prerequisites
 
 * Node.js and npm installed
@@ -60,48 +59,83 @@ Follow these instructions to set up and run the project on your local machine fo
 
 1.  **Clone the repository:**
     ```sh
-    git clone [https://github.com/your-username/neopaathshaala.git](https://github.com/your-username/neopaathshaala.git)
-    cd neopaathshaala
+    git clone https://github.com/Anuj3937/NeoPaathshala.git
+    cd NeoPaathshala
+    ```
+### 1. Backend Setup (`app` folder)
+
+The backend is a Python application that serves the core AI logic.
+
+1.  **Navigate to the Backend Directory:**
+    Open your terminal and navigate into the `app` folder.
+    ```sh
+    cd app
     ```
 
-2.  **Install frontend dependencies:**
+2.  **Create a Virtual Environment:**
+    It's highly recommended to create a virtual environment to manage project-specific dependencies.
+    ```sh
+    # For Windows
+    python -m venv venv
+    venv\Scripts\activate
+
+    # For macOS/Linux
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+3.  **Install Required Packages:**
+    With your virtual environment activated, install all the necessary Python packages.
+    ```sh
+    pip install -r requirements.txt
+    ```
+
+4.  **Set Up Environment Variables:**
+    * Inside the `app` folder, create a new file named `.env`.
+    * Copy the following keys into the file and fill in your values.
+
+    ```
+    GOOGLE_API_KEY=""
+    MAPS_API=""
+    SUPPABASE_PWD=""
+    ELEVENLABS_API_KEY=""
+    GOOGLE_CLIENT_ID=""
+    GOOGLE_CLIENT_SECRET=""
+    SECRET_KEY=""
+    ```
+    **Note:** For `SECRET_KEY`, you can generate a secure random string. One way is to run this in a Python shell: `import secrets; secrets.token_hex(32)`.
+
+5.  **Run the Backend Server:**
+    Use `uvicorn` to run the FastAPI application. The `--reload` flag automatically restarts the server when you save code changes.
+    ```sh
+    uvicorn main:app --reload
+    ```
+    The backend API should now be running, typically on `http://127.0.0.1:8000`.
+
+### 2. Frontend Setup (`neo` folder)
+
+The frontend is a React application built with Vite.
+
+1.  **Navigate to the Frontend Directory:**
+    In a **new terminal window**, navigate into the `neo` folder.
+    ```sh
+    cd neo
+    ```
+
+2.  **Install NPM Dependencies:**
+    Install all the necessary Node.js packages.
     ```sh
     npm install
     ```
 
-3.  **Set up Firebase:**
-    * Navigate to your Firebase project settings.
-    * Get your Firebase configuration object (apiKey, authDomain, etc.).
-    * Create a `.env.local` file in the root of the project.
-    * Add your Firebase configuration to the `.env.local` file. **Replace the placeholder values with your actual Firebase project keys.**
-    ```
-    GOOGLE_API_KEY=""
-    MAPS_API = ""
-    SUPPABASE_PWD = ""
-    ELEVENLABS_API_KEY = ""
-    GOOGLE_CLIENT_ID=""
-    GOOGLE_CLIENT_SECRET=""
-    SECRET_KEY="" # Generate a random string for this
-    ```
-
-4.  **Set up Backend Functions:**
-    * Navigate to the `functions` directory (`cd functions`).
-    * Install backend dependencies: `npm install`.
-    * Set up your environment variables for the Gemini API key using Firebase Functions configuration:
+3.  **Run the Frontend Application:**
+    Start the frontend development server.
     ```sh
-    firebase functions:config:set gemini.key="YOUR_GEMINI_API_KEY"
+    npm start
     ```
-
-5.  **Run the development server:**
-    * Go back to the root directory (`cd ..`).
-    * Start the Vite development server:
-    ```sh
-    npm run dev
-    ```
-    The application should now be running on `http://localhost:5173` (or another port if 5173 is busy).
+    The React application should now be running, typically on `http://localhost:3000`. Open this URL in your browser to use NeoPaathshala.
 
 ---
-
 ## 🔮 Future Scope
 
 * **LMS Integration:** Allow teachers to directly export lesson plans and resources into popular Learning Management Systems like Google Classroom.
