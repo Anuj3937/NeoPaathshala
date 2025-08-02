@@ -30,6 +30,12 @@ NeoPaathshaala is an AI assistant that revolutionizes the teaching workflow by p
 
 ---
 
+## 🎥 Demo Video
+[**Watch the NeoPaathshala Demo Video**](https://drive.google.com/file/d/1Pselm7ownzSSSMEraUbM3_pA6YvqjMKB/view?usp=sharing)
+
+
+---
+
 ## 🛠️ Technology Stack
 
 | Layer                | Technologies                                      |
